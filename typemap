@@ -1,7 +1,9 @@
-Geo::BUFR::EC::Message*	T_PTROBJ
-Geo::BUFR::EC::Dataset*	T_PTROBJ
-Geo::BUFR::EC::DataSubset*	T_PTROBJ
-Geo::BUFR::EC::Tables*	T_PTROBJ
-Geo::BUFR::EC::DescValue*	T_PTROBJ
-Geo::BUFR::EC::Sequence*	T_PTROBJ
-Geo::BUFR::EC::Template*	T_PTROBJ
+Geo::BUFR::EC::Message	T_PTROBJ
+Geo::BUFR::EC::Dataset	T_PTROBJ
+Geo::BUFR::EC::DataSubset	T_PTROBJ
+Geo::BUFR::EC::Tables	T_PTROBJ
+Geo::BUFR::EC::DescValue	T_PTROBJ
+Geo::BUFR::EC::Sequence	T_PTROBJ
+Geo::BUFR::EC::Template	T_PTROBJ
+Geo::BUFR::EC::Descriptor	T_PTROBJ
+Geo::BUFR::EC::Value	T_PTROBJ
