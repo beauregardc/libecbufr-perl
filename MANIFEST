@@ -5,4 +5,5 @@ MANIFEST
 ppport.h
 README
 t/Geo-BUFR-EC.t
+t/decode.t
 lib/Geo/BUFR/EC.pm

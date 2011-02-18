@@ -62,7 +62,7 @@ DESTROY(tables)
 		if( tables ) bufr_free_tables( tables );
 
 void
-LoadCMC(tables)
+cmc(tables)
 		Geo::BUFR::EC::Tables tables
 	CODE:
 		bufr_load_cmc_tables( tables );
@@ -185,7 +185,8 @@ toString(msg)
 		RETVAL
 
 Geo::BUFR::EC::Message
-fromString(s)
+fromString(packname="Geo::BUFR::EC::Message",s)
+		char *packname
 		SV* s
 	PREINIT:
 		STRLEN l;
@@ -245,11 +246,105 @@ DESTROY(d)
 			/* FIXME: same problem as the DataSubset destructor */
 		}
 
-Geo::BUFR::EC::Value
-value(d)
+int
+descriptor(d)
 		Geo::BUFR::EC::Descriptor d
 	CODE:
-		RETVAL = d->value;
+		RETVAL = d->descriptor;
+	OUTPUT:
+		RETVAL
+
+SV*
+set_value(d, sv=0)
+		Geo::BUFR::EC::Descriptor d
+		SV* sv
+	ALIAS:
+		Geo::BUFR::EC::Descriptor::get = 1
+		Geo::BUFR::EC::Descriptor::set = 2
+	INIT:
+		BufrValue* bv = d->value;
+	CODE:
+		if( bv == NULL ) XSRETURN_UNDEF;
+
+		if( ix == 2 && sv ) {
+			/* assign second param to value */
+			switch( bv->type ) {
+				case VALTYPE_INT64:
+					if( sv == &PL_sv_undef ) {
+						bufr_value_set_int64(bv,bufr_missing_int());
+					} else {
+						bufr_value_set_int64(bv,SvIV(sv));
+					}
+					break;
+				case VALTYPE_INT8:
+				case VALTYPE_INT32:
+					if( sv == &PL_sv_undef ) {
+						bufr_value_set_int32(bv,bufr_missing_int());
+					} else {
+						bufr_value_set_int32(bv,SvIV(sv));
+					}
+					break;
+				case VALTYPE_FLT32:
+					if( sv == &PL_sv_undef ) {
+						bufr_value_set_float(bv,bufr_missing_float());
+					} else {
+						bufr_value_set_float(bv,SvNV(sv));
+					}
+					break;
+				case VALTYPE_FLT64:
+					if( sv == &PL_sv_undef ) {
+						bufr_value_set_double(bv,bufr_missing_double());
+					} else {
+						bufr_value_set_double(bv,SvNV(sv));
+					}
+					break;
+				case VALTYPE_STRING: {
+					STRLEN l;
+					const char* s = SvPV(sv,l);
+					if( sv == &PL_sv_undef || s==NULL ) {
+                  int len=d->encoding.nbits/8;
+                  char *tmpbuf = (char *)malloc( (len+1)*sizeof(char) );
+						if( tmpbuf == NULL ) croak("malloc failed!");
+                  bufr_missing_string( tmpbuf, len );
+                  bufr_descriptor_set_svalue( d, tmpbuf );
+                  free( tmpbuf );
+					} else {
+						bufr_value_set_string(bv,s,l);
+					}
+					break;
+				}
+				default:
+					croak("Unknown/unhandled BUFR value type");
+					break;
+			}
+		}
+
+		/* return appropriate value */
+		if( bufr_value_is_missing(bv) ) {
+			XSRETURN_UNDEF;
+		}
+		switch( bv->type ) {
+			case VALTYPE_INT8:
+			case VALTYPE_INT32:
+			case VALTYPE_INT64:
+				RETVAL = newSViv(bufr_descriptor_get_ivalue(d));
+				break;
+			case VALTYPE_FLT32:
+				RETVAL = newSVnv(bufr_descriptor_get_fvalue(d));
+				break;
+			case VALTYPE_FLT64:
+				RETVAL = newSVnv(bufr_descriptor_get_dvalue(d));
+				break;
+			case VALTYPE_STRING: {
+				int len;
+				const char* s = bufr_descriptor_get_svalue(d,&len);
+				RETVAL = newSVpvn(s,len);
+				break;
+			}
+			default:
+				croak("Unknown/unhandled BUFR value type");
+				break;
+		}
 	OUTPUT:
 		RETVAL
 
@@ -262,30 +357,3 @@ float
 bufr_descriptor_get_location(d,desc)
 		Geo::BUFR::EC::Descriptor d
 		int desc
-
-MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Value
-
-void
-DESTROY(bv)
-		Geo::BUFR::EC::Value bv
-	CODE:
-		{
-			/* presently from a descriptor */
-			/* FIXME: same problem as the DataSubset destructor */
-		}
-
-SV*
-set_value(bv, sv=0)
-		Geo::BUFR::EC::Value bv
-		SV* sv
-	ALIAS:
-		Geo::BUFR::EC::Value::get = 1
-		Geo::BUFR::EC::Value::set = 2
-	CODE:
-		if( ix == 2 && sv ) {
-			/* assign second param to value */
-		}
-		RETVAL = newSV(0);
-		/* return appropriate value */
-	OUTPUT:
-		RETVAL
