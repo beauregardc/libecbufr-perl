@@ -304,6 +304,13 @@ MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Template
 
 A BUFR Template. Primarily used to generate new messages
 
+=head2 Geo::BUFR::EC::Template->new($tables,edition=4,...)
+
+Instantiate a new template using the specified C<$tables> and (optional)
+edition. A list of L<Geo::BUFR::EC::DescValue> objects may follow.
+
+Note that the template must be finalized before being used.
+
 =cut
 
 Geo::BUFR::EC::Template
@@ -337,6 +344,13 @@ DESTROY(tmpl)
 	CODE:
 		if( tmpl ) bufr_free_template(tmpl);
 
+=head2 $template->add_DescValue(@values)
+
+Add a list of L<Geo::BUFR::EC::DescValue> objects to an unfinalized
+C<$template>.
+
+=cut
+
 void
 add_DescValue(tmpl,...)
 		Geo::BUFR::EC::Template tmpl
@@ -352,11 +366,64 @@ add_DescValue(tmpl,...)
 			}
 		}
 
+=head2 $template->finalize()
+
+Finalize the template. This allows it to be used to build a message.
+
+=cut
+
 void
 finalize(tmpl,...)
 		Geo::BUFR::EC::Template tmpl
 	CODE:
 		bufr_finalize_template( tmpl );
+
+MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DescValue
+
+=head1 Geo::BUFR::EC::DescValue
+
+This object is a descriptor with a (possibly empty) list of associated values.
+Mainly used in template building where a sequence needs a set of values. Value
+may, of course, be "missing".
+
+=cut
+
+Geo::BUFR::EC::DescValue
+new(packname="Geo::BUFR::EC::DescValue",desc=0,...)
+      char* packname
+		int desc
+	PREINIT:
+		int i;
+	CODE:
+		RETVAL = malloc(sizeof(BufrDescValue));
+		if( RETVAL == NULL ) XSRETURN_UNDEF;
+		bufr_valloc_DescValue(RETVAL, items-2);
+		RETVAL->descriptor = desc;
+		for( i = 2; i < items; i ++ ) {
+			if( sv_isobject(ST(i)) && sv_derived_from(ST(i), "Geo::BUFR::EC::Value") ) {
+				BufrValue* d = INT2PTR(BufrValue*,SvIV((SV*)SvRV(ST(i))));
+				RETVAL->values[i-2] = bufr_duplicate_value(d);
+			} else {
+				croak("Expecting a Geo::BUFR::EC::Value");
+			}
+		}
+	OUTPUT:
+		RETVAL
+
+void
+DESTROY(dv)
+		Geo::BUFR::EC::DescValue dv
+	CODE:
+		bufr_vfree_DescValue(dv);
+		free( dv );
+
+int
+descriptor(dv)
+		Geo::BUFR::EC::DescValue dv
+	CODE:
+		RETVAL = dv->descriptor;
+	OUTPUT:
+		RETVAL
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset
 
@@ -409,7 +476,6 @@ encode(packname="Geo::BUFR::EC::Message",dts,compress=1)
 		int compress
 	CODE:
 		RETVAL = bufr_encode_message(dts,compress);
-		if( RETVAL == NULL ) XSRETURN_UNDEF;
 	OUTPUT:
 		RETVAL
 
@@ -427,7 +493,7 @@ SV*
 toString(msg)
 		Geo::BUFR::EC::Message msg
 	CODE:
-		RETVAL = newSV(0);
+		RETVAL = newSVpvn("",0);
 		if( bufr_callback_write_message( appendsv, (void*)RETVAL, msg ) ) {
 			XSRETURN_UNDEF;
 		}
@@ -463,6 +529,19 @@ A set of descriptor/value pairs.
 
 =cut
 
+Geo::BUFR::EC::DataSubset
+new(packname="Geo::BUFR::EC::DataSubset",dts)
+		char* packname
+		Geo::BUFR::EC::Dataset dts
+	PREINIT:
+		int n;
+	CODE:
+		n = bufr_create_datasubset(dts);
+		if( n < 0 ) XSRETURN_UNDEF;
+		RETVAL = bufr_get_datasubset( dts, n );
+	OUTPUT:
+		RETVAL
+
 void
 DESTROY(ds)
 		Geo::BUFR::EC::DataSubset ds
@@ -472,8 +551,6 @@ DESTROY(ds)
 		 * corresponding DataSet so it doesn't get destroyed until all subset
 		 * refs are dropped.
 		 */
-		{
-		}
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DataSubset  PREFIX = bufr_datasubset_
 

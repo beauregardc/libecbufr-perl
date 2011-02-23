@@ -6,4 +6,5 @@ ppport.h
 README
 t/Geo-BUFR-EC.t
 t/decode.t
+t/encode.t
 lib/Geo/BUFR/EC.pm
