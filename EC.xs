@@ -10,6 +10,8 @@ typedef BUFR_Message* Geo__BUFR__EC__Message;
 typedef BUFR_Dataset* Geo__BUFR__EC__Dataset;
 typedef DataSubset* Geo__BUFR__EC__DataSubset;
 typedef BUFR_Tables* Geo__BUFR__EC__Tables;
+typedef EntryTableB* Geo__BUFR__EC__Tables__Entry__B;
+typedef EntryTableD* Geo__BUFR__EC__Tables__Entry__D;
 typedef BufrDescValue* Geo__BUFR__EC__DescValue;
 typedef BufrDescriptor* Geo__BUFR__EC__Descriptor;
 typedef BufrValue* Geo__BUFR__EC__Value;
@@ -18,6 +20,15 @@ typedef BUFR_Template* Geo__BUFR__EC__Template;
 
 static ssize_t appendsv( void *dsv, size_t len, const char *buffer ) {
 	sv_catpvn((SV*)dsv, buffer, len);
+}
+
+/* FIXME: there's gotta be a saner way to do this. */
+static void make_unfreeable(SV* sv) {
+	sv_magic(SvRV(sv), NULL, '~', 1, 0 );
+}
+static int is_unfreeable(SV* sv) {
+	MAGIC* m = mg_find(SvRV(sv),'~');
+	return m && m->mg_ptr;
 }
 
 /**********************************************************************/
@@ -46,6 +57,12 @@ BOOT:
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Tables
 
+=head1 Geo::BUFR::EC::Tables
+
+A BUFR tables holder. Contains both Table B and D entries.
+
+=cut
+
 Geo::BUFR::EC::Tables
 new(packname="Geo::BUFR::EC::Tables")
 		char* packname
@@ -61,13 +78,233 @@ DESTROY(tables)
 	CODE:
 		if( tables ) bufr_free_tables( tables );
 
+=head2 $tables->cmc()
+
+Loads the default set of CMC BUFR tables into C<$tables> as found by
+the C<BUFR_TABLES> environment variable. If missing falls back to the
+LibECBUFR default location.
+
+=cut
+
 void
 cmc(tables)
 		Geo::BUFR::EC::Tables tables
 	CODE:
 		bufr_load_cmc_tables( tables );
 
+=head2 $tables->lookup($desc)
+
+Looks up bufr descriptor C<$desc> in the loaded <$tables>. Depending on the type
+of descriptor it may return a C<Geo::BUFR::EC::Tables::Entry::B> or
+C<Geo::BUFR::EC::Tables::Entry::D> object, or C<undef> on failure.
+
+C<$desc> may be an integer value or a C<Geo::BUFR::EC::DescValue> object.
+
+=cut
+
+void
+lookup(tables,desc)
+		Geo::BUFR::EC::Tables tables
+		SV* desc
+	PREINIT:
+		int d = 0;
+	PPCODE:
+		/* FIXME: we _could_ break this into separate functions */
+		if( sv_isobject(desc) && sv_derived_from(desc, "Geo::BUFR::EC::DescValue") ) {
+			BufrDescValue* myd = INT2PTR(BufrDescValue*,SvIV((SV*)SvRV(desc)));
+			if( myd ) d = myd->descriptor;
+		} else {
+			d = SvIV(desc);
+		}
+		if( !bufr_is_descriptor(d) ) {
+			XSRETURN_UNDEF;
+		} else if( bufr_is_table_b(d) ) {
+			EntryTableB* tb = bufr_fetch_tableB( tables, d);
+			if( tb == NULL ) XSRETURN_UNDEF;
+			ST(0) = sv_newmortal();
+			sv_setref_pv(ST(0), "Geo::BUFR::EC::Tables::Entry::B", (void*)tb);
+			/* FIXME: might be better to just make a copy? */
+			make_unfreeable(ST(0));
+		} else {
+			EntryTableD* td = bufr_fetch_tableD( tables, d);
+			if( td == NULL ) XSRETURN_UNDEF;
+			ST(0) = sv_newmortal();
+			sv_setref_pv(ST(0), "Geo::BUFR::EC::Tables::Entry::D", (void*)td);
+			/* FIXME: might be better to just make a copy? */
+			make_unfreeable(ST(0));
+		}
+		XSRETURN(1);
+
+MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Tables::Entry::B
+
+=head1 Geo::BUFR::EC::Tables::Entry::B
+
+Table B entry.
+
+=cut
+
+Geo::BUFR::EC::Tables::Entry::B
+new(packname="Geo::BUFR::EC::Tables::Entry::B")
+		char* packname
+	CODE:
+		/* empty for now */
+	OUTPUT:
+		RETVAL
+	
+void
+DESTROY(eb)
+		Geo::BUFR::EC::Tables::Entry::B eb
+	CODE:
+		if( !is_unfreeable(ST(0)) ) bufr_free_EntryTableB( eb );
+
+=head2 $eb->description()
+
+Returns the description text for Table B entry C<$eb>.
+
+=head2 $eb->unit()
+
+Returns the units text for Table B entry C<$eb>.
+
+=cut
+
+char*
+description(eb)
+		Geo::BUFR::EC::Tables::Entry::B eb
+	ALIAS:
+		Geo::BUFR::EC::Tables::Entry::B::unit = 1
+	CODE:
+		if( ix == 1 ) {
+			RETVAL = eb->unit;
+		} else {
+			RETVAL = eb->description;
+		}
+	OUTPUT:
+		RETVAL
+
+=head2 $eb->descriptor()
+
+Returns the BUFR descriptor value for C<$eb>.
+
+=head2 $eb->scale()
+
+Returns the scale value for C<$eb>.
+
+=head2 $eb->reference()
+
+Returns the reference value for C<$eb>.
+
+=head2 $eb->nbits()
+
+Returns the number of bits used for C<$eb>.
+
+=cut
+
+int
+descriptor(eb)
+		Geo::BUFR::EC::Tables::Entry::B eb
+	ALIAS:
+		Geo::BUFR::EC::Tables::Entry::B::scale = 1
+		Geo::BUFR::EC::Tables::Entry::B::reference = 2
+		Geo::BUFR::EC::Tables::Entry::B::nbits = 3
+	CODE:
+		/* NOTE: af_nbits not implemented here... doesn't seem right to have that
+		 * in a table entry.
+		 */
+		switch(ix) {
+			case 1:
+				RETVAL = eb->encoding.scale;
+				break;
+			case 2:
+				RETVAL = eb->encoding.reference;
+				break;
+			case 3:
+				RETVAL = eb->encoding.nbits;
+				break;
+			default:
+				RETVAL = eb->descriptor;
+				break;
+		}
+	OUTPUT:
+		RETVAL
+
+MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Tables::Entry::D
+
+=head1 Geo::BUFR::EC::Tables::Entry::D
+
+Table D entry.
+
+=cut
+
+Geo::BUFR::EC::Tables::Entry::D
+new(packname="Geo::BUFR::EC::Tables::Entry::D")
+		char* packname
+	CODE:
+		/* empty for now */
+	OUTPUT:
+		RETVAL
+	
+void
+DESTROY(ed)
+		Geo::BUFR::EC::Tables::Entry::D ed
+	CODE:
+		if( !is_unfreeable(ST(0)) ) bufr_free_EntryTableD( ed );
+
+=head2 $ed->descriptor()
+
+Returns the BUFR descriptor value for C<$ed>.
+
+=cut
+
+int
+descriptor(ed)
+		Geo::BUFR::EC::Tables::Entry::D ed
+	CODE:
+		RETVAL = ed->descriptor;
+	OUTPUT:
+		RETVAL
+
+=head2 $ed->description()
+
+Returns the plain text description for C<$ed>, if any.
+
+=cut
+
+char*
+description(ed)
+		Geo::BUFR::EC::Tables::Entry::D ed
+	CODE:
+		RETVAL = ed->description;
+	OUTPUT:
+		RETVAL
+
+=head2 $ed->descriptors()
+
+Returns the ordered list of descriptors associated with the BUFR
+template/sequence C<$ed>.
+
+=cut
+
+void
+descriptors(ed)
+		Geo::BUFR::EC::Tables::Entry::D ed
+	PREINIT:
+		int count, i;
+	PPCODE:
+		count = ed->count;
+		if( count <= 0 ) XSRETURN_EMPTY;	/* should never happen */
+		EXTEND(SP,count);
+		for( i = 0; i < count; i ++ ) {
+			ST(i) = sv_2mortal(newSViv(ed->descriptors[i]));
+		}
+		XSRETURN(count);
+
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Template
+
+=head1 Geo::BUFR::EC::Template
+
+A BUFR Template. Primarily used to generate new messages
+
+=cut
 
 Geo::BUFR::EC::Template
 new(packname="Geo::BUFR::EC::Template",tables,edition=4,...)
@@ -84,7 +321,7 @@ new(packname="Geo::BUFR::EC::Template",tables,edition=4,...)
 		 * descval array
 		 */
 		for( i = 3; i < items; i ++ ) {
-			if( sv_derived_from(ST(i), "Geo::BUFR::EC::DescValue") ) {
+			if( sv_isobject(ST(i)) && sv_derived_from(ST(i), "Geo::BUFR::EC::DescValue") ) {
 				BufrDescValue* d = INT2PTR(BufrDescValue*,SvIV((SV*)SvRV(ST(i))));
 				bufr_template_add_DescValue( RETVAL, d, 1 );
 			} else {
@@ -107,7 +344,7 @@ add_DescValue(tmpl,...)
 		int i;
 	CODE:
 		for( i = 1; i < items; i ++ ) {
-			if( sv_derived_from(ST(i), "Geo::BUFR::EC::DescValue") ) {
+			if( sv_isobject(ST(i)) && sv_derived_from(ST(i), "Geo::BUFR::EC::DescValue") ) {
 				BufrDescValue* d = INT2PTR(BufrDescValue*,SvIV((SV*)SvRV(ST(i))));
 				bufr_template_add_DescValue( tmpl, d, 1 );
 			} else {
@@ -122,6 +359,13 @@ finalize(tmpl,...)
 		bufr_finalize_template( tmpl );
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset
+
+=head1 Geo::BUFR::EC::Dataset
+
+Essentially, this is the content of BUFR section 4. Data subsets are extracted
+from this object.
+
+=cut
 
 Geo::BUFR::EC::Dataset
 new(packname="Geo::BUFR::EC::Dataset",tmpl)
@@ -151,6 +395,12 @@ bufr_get_datasubset(dts,pos)
 		int pos
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Message
+
+=head1 Geo::BUFR::EC::Message
+
+A BUFR message used either for encoding or decoding.
+
+=cut
 
 Geo::BUFR::EC::Message
 encode(packname="Geo::BUFR::EC::Message",dts,compress=1)
@@ -207,6 +457,12 @@ DESTROY(msg)
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DataSubset
 
+=head1 Geo::BUFR::EC::DataSubset
+
+A set of descriptor/value pairs.
+
+=cut
+
 void
 DESTROY(ds)
 		Geo::BUFR::EC::DataSubset ds
@@ -237,6 +493,13 @@ bufr_datasubset_next_descriptor(ds,pos)
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Descriptor
 
+=head1 Geo::BUFR::EC::Descriptor
+
+BUFR descriptor object. May or may not have an associated value depending on the
+kind of descriptor.
+
+=cut
+
 void
 DESTROY(d)
 		Geo::BUFR::EC::Descriptor d
@@ -251,6 +514,14 @@ descriptor(d)
 		Geo::BUFR::EC::Descriptor d
 	CODE:
 		RETVAL = d->descriptor;
+	OUTPUT:
+		RETVAL
+
+Geo::BUFR::EC::Value
+value(d)
+		Geo::BUFR::EC::Descriptor d
+	CODE:
+		RETVAL = d->value;
 	OUTPUT:
 		RETVAL
 
@@ -348,6 +619,105 @@ set_value(d, sv=0)
 	OUTPUT:
 		RETVAL
 
+int
+is_descriptor(d)
+		Geo::BUFR::EC::Descriptor d
+	CODE:
+		RETVAL = bufr_is_descriptor(d->descriptor);
+	OUTPUT:
+		RETVAL
+
+int
+is_local(d)
+		Geo::BUFR::EC::Descriptor d
+	CODE:
+		RETVAL = bufr_is_local_descriptor(d->descriptor);
+	OUTPUT:
+		RETVAL
+
+int
+is_table_d(d)
+		Geo::BUFR::EC::Descriptor d
+	ALIAS:
+		Geo::BUFR::EC::Descriptor::is_qualifier = 1
+		Geo::BUFR::EC::Descriptor::is_table_b = 2
+	CODE:
+		if( !bufr_is_descriptor(d->descriptor) ) {
+			RETVAL = 0;
+		} else {
+			int f, x, y;
+			bufr_descriptor_to_fxy(d->descriptor,&f,&x,&y);
+			if( ix == 0 ) {
+				RETVAL = (f == 3);
+			} else if( ix == 1 ) {
+				RETVAL = (f==0 && x>=1 && x<=0);
+			} else if( ix == 2 ) {
+				/* NOTE: we _could_ use bufr_is_table_b(),
+				 * but it's handy to have all these related functions
+				 * in one place...
+				 */
+				RETVAL = (f == 0);
+			}
+		}
+	OUTPUT:
+		RETVAL
+
+=head2 $d->flags()
+
+Returns the C<flags> field of the descriptor.
+
+=head2 $d->is_class31()
+
+Returns non-zero if the descriptor is flagged as FLAG_CLASS31.
+
+=head2 $d->is_expanded()
+
+Returns non-zero if the descriptor is flagged as FLAG_EXPANDED.
+
+=head2 $d->is_skipped()
+
+Returns non-zero if the descriptor is flagged as FLAG_SKIPPED.
+
+=head2 $d->is_class33()
+
+Returns non-zero if the descriptor is flagged as FLAG_CLASS33.
+
+=head2 $d->is_ignored()
+
+Returns non-zero if the descriptor is flagged as FLAG_IGNORED.
+
+=cut
+
+int
+flags(d)
+		Geo::BUFR::EC::Descriptor d
+	ALIAS:
+		Geo::BUFR::EC::Descriptor::is_class31 = FLAG_CLASS31
+		Geo::BUFR::EC::Descriptor::is_expanded = FLAG_EXPANDED
+		Geo::BUFR::EC::Descriptor::is_skipped = FLAG_SKIPPED
+		Geo::BUFR::EC::Descriptor::is_class33 = FLAG_CLASS33
+		Geo::BUFR::EC::Descriptor::is_ignored = FLAG_IGNORED
+	CODE:
+		RETVAL = ix ? (d->flags & ix) : d->flags;
+	OUTPUT:
+		RETVAL
+
+void
+to_fxy(d)
+		Geo::BUFR::EC::Descriptor d
+	PREINIT:
+		int f, x, y;
+	PPCODE:
+		if( !bufr_is_descriptor(d->descriptor) ) {
+			XSRETURN_EMPTY;
+		}
+		bufr_descriptor_to_fxy(d->descriptor,&f,&x,&y);
+		EXTEND(SP,3);
+		ST(0) = sv_2mortal(newSViv(f));
+		ST(1) = sv_2mortal(newSViv(x));
+		ST(2) = sv_2mortal(newSViv(y));
+		XSRETURN(3);
+
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Descriptor PREFIX = bufr_descriptor_
 
 void
@@ -357,3 +727,68 @@ float
 bufr_descriptor_get_location(d,desc)
 		Geo::BUFR::EC::Descriptor d
 		int desc
+
+MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Value
+
+=head1 Geo::BUFR::EC::Value
+
+Low-level access to BUFR values. Most users should be fine with the
+C<Geo::BUFR::EC::Descriptor> methods. Particularly for string access where the
+length of the string requires additional informaiton.
+
+=cut
+
+void
+DESTROY(bv)
+		Geo::BUFR::EC::Value bv
+	CODE:
+		{
+			/* empty; we look right into the DataSubset array */
+			/* FIXME: same problem as the DataSubset destructor */
+		}
+
+
+MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Value   PREFIX=bufr_value_
+
+int
+bufr_value_set_double(bv,val)
+		Geo::BUFR::EC::Value bv
+		double val
+
+int
+bufr_value_set_float(bv,val)
+		Geo::BUFR::EC::Value bv
+		float val
+
+int
+bufr_value_set_int32(bv,val)
+		Geo::BUFR::EC::Value bv
+		int32_t val
+
+int
+bufr_value_set_int64(bv,val)
+		Geo::BUFR::EC::Value bv
+		int64_t val
+
+int
+bufr_value_set_string(Geo::BUFR::EC::Value bv, char* s, int length(s))
+
+double
+bufr_value_get_double(bv)
+		Geo::BUFR::EC::Value bv
+
+float
+bufr_value_get_float(bv)
+		Geo::BUFR::EC::Value bv
+
+int32_t
+bufr_value_get_int32(bv)
+		Geo::BUFR::EC::Value bv
+
+int64_t
+bufr_value_get_int64(bv)
+		Geo::BUFR::EC::Value bv
+
+char*
+bufr_value_get_string(IN Geo::BUFR::EC::Value bv, OUTLIST int len)
+

@@ -42,12 +42,25 @@ for( my $sno = 0; $sno < $nds; $sno ++ ) {
 		my $d = $ds->get_descriptor($dno);
 		ok( defined $d );
 
+		my $e = $tables->lookup($d->descriptor());
+		# if it wasn't in the tables, we couldn't decode
+		ok( defined $e || !($d->is_table_b() || $d->is_table_d()) );
+
 		my $val = $d->get();
-		if( defined $val ) {
-			print $d->descriptor(), ': ', $val, "\n";
-		} else {
-			print $d->descriptor(), ": <no value>\n";
+		print $d->descriptor(), ': ',
+			(defined($val) ? $val : '<no value>'),
+			' (', $d->flags(), ')',
+			;
+
+		if( defined $e ) {
+			if( $e->isa('Geo::BUFR::EC::Tables::Entry::B') ) {
+				print '  ', $e->unit();
+			} elsif( $e->isa('Geo::BUFR::EC::Tables::Entry::D') ) {
+				print '  ', length($e->descriptors()), ' descriptors';
+			}
 		}
+
+		print "\n";
 	}
 }
 
