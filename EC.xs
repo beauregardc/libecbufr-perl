@@ -22,13 +22,26 @@ static ssize_t appendsv( void *dsv, size_t len, const char *buffer ) {
 	sv_catpvn((SV*)dsv, buffer, len);
 }
 
-/* FIXME: there's gotta be a saner way to do this. */
-static void make_unfreeable(SV* sv) {
-	sv_magic(SvRV(sv), NULL, '~', 1, 0 );
+/**********************************************************************/
+/* We need to create objects which point into memory "owned" by other SV's.
+ * We don't want those other SV's to get freed and leave us pointing at junk
+ * memory so we increment the related count as well. In some cases, we may
+ * not even want to free our own structure so we ensure the release
+ * indicates whether or not a related object exists. In some cases, of course,
+ * we may release both a related object and our own memory.
+ * NOTE: some care may be needed to prevent circular references.
+ */
+static void hold_related(SV* sv, SV* related) {
+	SvREFCNT_inc( related );
+	sv_magic(SvRV(sv), NULL, '~', (void*)related, 0 );
 }
-static int is_unfreeable(SV* sv) {
+static SV* release_related(SV* sv) {
 	MAGIC* m = mg_find(SvRV(sv),'~');
-	return m && m->mg_ptr;
+	if( m && m->mg_ptr ) {
+		SvREFCNT_dec( (SV*)(m->mg_ptr) );
+		return (SV*)(m->mg_ptr);
+	}
+	return NULL;	/* no related */
 }
 
 /**********************************************************************/
@@ -108,8 +121,9 @@ lookup(tables,desc)
 		SV* desc
 	PREINIT:
 		int d = 0;
+		SV* tablessv = ST(0);
 	PPCODE:
-		/* FIXME: we _could_ break this into separate functions */
+		/* We _could_ break this into separate functions... or an alias */
 		if( sv_isobject(desc) && sv_derived_from(desc, "Geo::BUFR::EC::DescValue") ) {
 			BufrDescValue* myd = INT2PTR(BufrDescValue*,SvIV((SV*)SvRV(desc)));
 			if( myd ) d = myd->descriptor;
@@ -123,15 +137,13 @@ lookup(tables,desc)
 			if( tb == NULL ) XSRETURN_UNDEF;
 			ST(0) = sv_newmortal();
 			sv_setref_pv(ST(0), "Geo::BUFR::EC::Tables::Entry::B", (void*)tb);
-			/* FIXME: might be better to just make a copy? */
-			make_unfreeable(ST(0));
+			hold_related(ST(0), tablessv);
 		} else {
 			EntryTableD* td = bufr_fetch_tableD( tables, d);
 			if( td == NULL ) XSRETURN_UNDEF;
 			ST(0) = sv_newmortal();
 			sv_setref_pv(ST(0), "Geo::BUFR::EC::Tables::Entry::D", (void*)td);
-			/* FIXME: might be better to just make a copy? */
-			make_unfreeable(ST(0));
+			hold_related(ST(0), tablessv);
 		}
 		XSRETURN(1);
 
@@ -155,7 +167,7 @@ void
 DESTROY(eb)
 		Geo::BUFR::EC::Tables::Entry::B eb
 	CODE:
-		if( !is_unfreeable(ST(0)) ) bufr_free_EntryTableB( eb );
+		if( !release_related(ST(0)) ) bufr_free_EntryTableB( eb );
 
 =head2 $eb->description()
 
@@ -247,7 +259,7 @@ void
 DESTROY(ed)
 		Geo::BUFR::EC::Tables::Entry::D ed
 	CODE:
-		if( !is_unfreeable(ST(0)) ) bufr_free_EntryTableD( ed );
+		if( !release_related(ST(0)) ) bufr_free_EntryTableD( ed );
 
 =head2 $ed->descriptor()
 
@@ -321,6 +333,8 @@ new(packname="Geo::BUFR::EC::Template",tables,edition=4,...)
 	PREINIT:
 		int i;
 	CODE:
+		/* NOTE: this copies the tables so we don't have to hold them as
+		 * being related */
 		RETVAL = bufr_create_template( NULL, 0, tables, edition);
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
 
@@ -439,6 +453,7 @@ new(packname="Geo::BUFR::EC::Dataset",tmpl)
       char* packname
 		Geo::BUFR::EC::Template tmpl
 	CODE:
+		/* NOTE: this implicitly makes a copy of the template */
 		RETVAL = bufr_create_dataset(tmpl);
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
 	OUTPUT:
@@ -460,6 +475,10 @@ Geo::BUFR::EC::DataSubset
 bufr_get_datasubset(dts,pos)
 		Geo::BUFR::EC::Dataset dts
 		int pos
+	PREINIT:
+		SV* dtssv = ST(0);
+	CLEANUP:
+		hold_related(ST(0), dtssv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Message
 
@@ -527,6 +546,13 @@ MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DataSubset
 
 A set of descriptor/value pairs.
 
+=head2 Geo::BUFR::EC::DataSubset->new($dts)
+
+Create a new datasubset int the specified dataset C<$dts>. Note that the
+datasubset will be initialized according to the dataset template used for
+encoding. The datasubset is added as the last element in the dataset, so one
+can use C<$dts->count_datasubset()-1> if necessary to calculate the index.
+
 =cut
 
 Geo::BUFR::EC::DataSubset
@@ -535,22 +561,25 @@ new(packname="Geo::BUFR::EC::DataSubset",dts)
 		Geo::BUFR::EC::Dataset dts
 	PREINIT:
 		int n;
+		SV* dtssv = ST(1);
 	CODE:
 		n = bufr_create_datasubset(dts);
 		if( n < 0 ) XSRETURN_UNDEF;
 		RETVAL = bufr_get_datasubset( dts, n );
 	OUTPUT:
 		RETVAL
+	CLEANUP:
+		hold_related(ST(0), dtssv);
 
 void
 DESTROY(ds)
 		Geo::BUFR::EC::DataSubset ds
 	CODE:
-		/* empty - tied to the DataSet */
-		/* FIXME: come up with some way to take a ref to the
-		 * corresponding DataSet so it doesn't get destroyed until all subset
-		 * refs are dropped.
-		 */
+		/* Note that datasubsets can't existing independent on a dataset, so we'll
+		 * never need to actually free one. We will, however, probably hold a ref
+		 * to the dataset object.
+		 */ 
+		release_related(ST(0));
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DataSubset  PREFIX = bufr_datasubset_
 
@@ -562,11 +591,19 @@ Geo::BUFR::EC::Descriptor
 bufr_datasubset_get_descriptor(ds,pos)
 		Geo::BUFR::EC::DataSubset ds
 		int pos
+	PREINIT:
+		SV* relatedsv = ST(0);
+	CLEANUP:
+		hold_related(ST(0),relatedsv);
 
 Geo::BUFR::EC::Descriptor
 bufr_datasubset_next_descriptor(ds,pos)
 		Geo::BUFR::EC::DataSubset ds
 		int &pos
+	PREINIT:
+		SV* relatedsv = ST(0);
+	CLEANUP:
+		hold_related(ST(0),relatedsv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Descriptor
 
@@ -581,10 +618,13 @@ void
 DESTROY(d)
 		Geo::BUFR::EC::Descriptor d
 	CODE:
-		{
-			/* empty; we look right into the DataSubset array */
-			/* FIXME: same problem as the DataSubset destructor */
-		}
+		if( !release_related(ST(0)) ) bufr_free_descriptor(d);
+
+=head2 $desc->descriptor()
+
+Returns the numeric descriptor value for C<$desc>.
+
+=cut 
 
 int
 descriptor(d)
@@ -594,13 +634,42 @@ descriptor(d)
 	OUTPUT:
 		RETVAL
 
+=head2 $desc->value()
+
+Returns the L<Geo::BUFR::EC::Value> value for C<$desc>. This should be necessary
+unless very precise control over values are required.
+
+=cut 
+
 Geo::BUFR::EC::Value
 value(d)
 		Geo::BUFR::EC::Descriptor d
+	PREINIT:
+		SV* relatedsv = ST(0);
 	CODE:
 		RETVAL = d->value;
 	OUTPUT:
 		RETVAL
+	CLEANUP:
+		hold_related(ST(0),relatedsv);
+
+=head2 $desc->get()
+
+Returns scalar value for the descriptor C<$desc>. The resulting scalar will
+match the type of the object as closely as possible. Missing BUFR values will be
+returned as C<undef>.
+
+Note that a L<Geo::BUFR::EC::Descriptor> object may not have an associated value
+(i.e. Table D descriptors), in which case this function will also return
+C<undef>. C<< $desc->is_missing() >> can be used to determine the difference.
+
+=head2 $desc->set($val)
+
+Set the value of C<$desc> to the scalar C<$val>. The scalar value will be mapped
+to the descriptor type as closely as possible. To store a missing value, use
+C<undef>. Returns the same as C<< $desc->get() >>.
+
+=cut 
 
 SV*
 set_value(d, sv=0)
@@ -696,44 +765,80 @@ set_value(d, sv=0)
 	OUTPUT:
 		RETVAL
 
+=head2 $desc->is_descriptor()
+
+Returns non-zero is C<$desc> has a proper BUFR descriptor value. This should
+always be the case unless a user manually instantiates an invalid one for some
+reason.
+
+=head2 $desc->is_table_b()
+
+Returns non-zero if C<$desc> is a Table B descriptor.
+
+=head2 $desc->is_table_c()
+
+Returns non-zero if C<$desc> is a Table C descriptor.
+
+=head2 $desc->is_table_d()
+
+Returns non-zero if C<$desc> is a Table D descriptor.
+
+=head2 $desc->is_local()
+
+Returns non-zero if C<$desc> is a local replicator.
+
+=head2 $desc->is_replicator()
+
+Returns non-zero if C<$desc> is a BUFR replicator.
+
+=head2 $desc->is_missing()
+
+Returns non-zero if C<$desc> contains a missing value, zero if the value isn't
+missing, and C<undef> is no value is associated with the descriptor.
+
+=cut
+
 int
 is_descriptor(d)
-		Geo::BUFR::EC::Descriptor d
-	CODE:
-		RETVAL = bufr_is_descriptor(d->descriptor);
-	OUTPUT:
-		RETVAL
-
-int
-is_local(d)
-		Geo::BUFR::EC::Descriptor d
-	CODE:
-		RETVAL = bufr_is_local_descriptor(d->descriptor);
-	OUTPUT:
-		RETVAL
-
-int
-is_table_d(d)
 		Geo::BUFR::EC::Descriptor d
 	ALIAS:
 		Geo::BUFR::EC::Descriptor::is_qualifier = 1
 		Geo::BUFR::EC::Descriptor::is_table_b = 2
+		Geo::BUFR::EC::Descriptor::is_table_d = 3
+		Geo::BUFR::EC::Descriptor::is_local = 4
+		Geo::BUFR::EC::Descriptor::is_missing = 5
+		Geo::BUFR::EC::Descriptor::is_table_c = 6
+		Geo::BUFR::EC::Descriptor::is_replicator = 7
 	CODE:
+		if( ix == 5 ) {
+			if( d->value ) {
+				RETVAL = bufr_value_is_missing(d->value);
+			} else {
+				XSRETURN_UNDEF;
+			}
+		}
 		if( !bufr_is_descriptor(d->descriptor) ) {
 			RETVAL = 0;
+		} else if( ix == 0 ) {
+			RETVAL = 1;
+		} else if( ix == 4 ) {
+			RETVAL = bufr_is_local_descriptor(d->descriptor);
 		} else {
 			int f, x, y;
 			bufr_descriptor_to_fxy(d->descriptor,&f,&x,&y);
-			if( ix == 0 ) {
+			if( ix == 3 ) {
 				RETVAL = (f == 3);
+			} else if( ix == 6 ) {
+				RETVAL = (f == 2);
+			} else if( ix == 7 ) {
+				RETVAL = (f == 1);
 			} else if( ix == 1 ) {
 				RETVAL = (f==0 && x>=1 && x<=0);
 			} else if( ix == 2 ) {
-				/* NOTE: we _could_ use bufr_is_table_b(),
-				 * but it's handy to have all these related functions
-				 * in one place...
-				 */
+				/* NOTE: we _could_ use bufr_is_table_b() */
 				RETVAL = (f == 0);
+			} else {
+				croak("Unknown alias");
 			}
 		}
 	OUTPUT:
@@ -779,6 +884,12 @@ flags(d)
 	OUTPUT:
 		RETVAL
 
+=head2 $desc->to_fxy()
+
+Returns the descriptor as list of F,X and Y values.
+
+=cut
+
 void
 to_fxy(d)
 		Geo::BUFR::EC::Descriptor d
@@ -819,11 +930,7 @@ void
 DESTROY(bv)
 		Geo::BUFR::EC::Value bv
 	CODE:
-		{
-			/* empty; we look right into the DataSubset array */
-			/* FIXME: same problem as the DataSubset destructor */
-		}
-
+		if( !release_related(ST(0)) ) bufr_free_value(bv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Value   PREFIX=bufr_value_
 
@@ -866,6 +973,6 @@ int64_t
 bufr_value_get_int64(bv)
 		Geo::BUFR::EC::Value bv
 
-char*
+const char*
 bufr_value_get_string(IN Geo::BUFR::EC::Value bv, OUTLIST int len)
 
