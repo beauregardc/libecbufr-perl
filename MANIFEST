@@ -4,6 +4,7 @@ Makefile.PL
 MANIFEST
 ppport.h
 README
+COPYING.LESSER
 t/Geo-BUFR-EC.t
 t/decode.t
 t/encode.t

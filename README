@@ -1,16 +1,15 @@
 Geo-BUFR-EC version 0.01
 ========================
 
-The README is used to introduce the module and provide instructions on
-how to install the module, any machine dependencies it may have (for
-example C compilers and installed libraries) and any other information
-that should be provided before the module is installed.
+LibECBUFR-perl: Environment Canada BUFR Library Perl bindings
 
-A README file is required for CPAN modules since CPAN extracts the
-README file from a module distribution so that people browsing the
-archive can use it get an idea of the modules uses. It is usually a
-good idea to provide version information here so that people can
-decide whether fixes for the module are worth downloading.
+It is designed as a simple to use, Templates oriented, general purposes
+library for reading and writing BUFR messages.  Using one single interface
+for both reading and writing.
+
+DEPENDENCIES
+
+Requires the LibECBUFR C library.
 
 INSTALLATION
 
@@ -21,20 +20,21 @@ To install this module type the following:
    make test
    make install
 
-DEPENDENCIES
-
-This module requires these other modules and libraries:
-
-  blah blah blah
-
 COPYRIGHT AND LICENCE
 
-Put the correct copyright and licence information here.
+Licence:
+Copyright Her Majesty The Queen in Right of Canada, Environment Canada, 2009-2010.
+Copyright Sa Majeste la Reine du Chef du Canada, Environnement Canada, 2009-2010.
 
-Copyright (C) 2011 by Christophe Beauregard
+    libECBUFR is free software: you can redistribute it and/or modify
+    it under the terms of the Lesser GNU General Public License,
+    version 3, as published by the Free Software Foundation.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.10.1 or,
-at your option, any later version of Perl 5 you may have available.
+    libECBUFR is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    Lesser GNU General Public License for more details.
 
+    You should have received a copy of the Lesser GNU General Public
+    License along with libECBUFR.  If not, see <http://www.gnu.org/licenses/>.
 
