@@ -5,6 +5,7 @@ MANIFEST
 ppport.h
 README
 COPYING.LESSER
+COPYING
 t/Geo-BUFR-EC.t
 t/decode.t
 t/encode.t
