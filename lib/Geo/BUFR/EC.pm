@@ -34,16 +34,14 @@ XSLoader::load('Geo::BUFR::EC', $VERSION);
 
 1;
 __END__
-# Below is stub documentation for your module. You'd better edit it!
 
 =head1 NAME
 
-Geo::BUFR::EC - Perl extension for blah blah blah
+Geo::BUFR::EC - Perl extension for the LibECBUFR library
 
 =head1 SYNOPSIS
 
   use Geo::BUFR::EC;
-  blah blah blah
 
 =head1 DESCRIPTION
 
@@ -51,36 +49,34 @@ Stub documentation for Geo::BUFR::EC, created by h2xs. It looks like the
 author of the extension was negligent enough to leave the stub
 unedited.
 
-Blah blah blah.
-
 =head2 EXPORT
 
 None by default.
 
-
-
 =head1 SEE ALSO
 
-Mention other useful documentation such as the documentation of
-related modules or operating system documentation (such as man pages
-in UNIX), or any relevant external documentation such as RFCs or
-standards.
-
-If you have a mailing list set up for your module, mention it here.
-
-If you have a web site set up for your module, mention it here.
+L<http://launchpad.net/libecbufr>
 
 =head1 AUTHOR
 
-Christophe Beauregard, E<lt>cpb@E<gt>
+Christophe Beauregard, E<lt>chris.beauregard@ec.gc.caE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2011 by Christophe Beauregard
+Licence:
+Copyright Her Majesty The Queen in Right of Canada, Environment Canada, 2009-2010.
+Copyright Sa Majeste la Reine du Chef du Canada, Environnement Canada, 2009-2010.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.10.1 or,
-at your option, any later version of Perl 5 you may have available.
+    libECBUFR is free software: you can redistribute it and/or modify
+    it under the terms of the Lesser GNU General Public License,
+    version 3, as published by the Free Software Foundation.
 
+    libECBUFR is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    Lesser GNU General Public License for more details.
+
+    You should have received a copy of the Lesser GNU General Public
+    License along with libECBUFR.  If not, see <http://www.gnu.org/licenses/>.
 
 =cut
