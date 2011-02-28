@@ -32,11 +32,18 @@ $tmpl->finalize();
 my $dts = Geo::BUFR::EC::Dataset->new($tmpl);
 ok( defined $dts );
 
+my $s1 = $dts->section1();
+ok( defined $s1 );
+
+my @t = gmtime(time());
+@{$s1}{qw/year month second minute hour day/}
+	= ($t[5]+1900, $t[4]+1, @t[0 .. 3]);
+
 for( my $i = 0; $i < 4; $i ++ ) {
 	my $ds = Geo::BUFR::EC::DataSubset->new($dts);
 	ok(defined $ds);
 
-	my @t = gmtime(time());
+	@t = gmtime(time());
 
 	# FIXME: we could probably do this nicer if we exposed more
 	# of the decoding functions in the API...

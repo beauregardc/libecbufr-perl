@@ -45,6 +45,93 @@ static SV* release_related(SV* sv) {
 }
 
 /**********************************************************************/
+/*
+	Section 1 is best represented to the user as a hash table. However
+	the data is embedded in a dataset or message. Hence we have a hash tied to
+	a C structure with all the appropriate magic in between.
+*/
+typedef struct {
+	const char* key;
+	int keylen;
+	int len;
+	int offset;
+} BufrSection1_key_t;
+
+static BufrSection1_key_t s1keys[]= {
+	{"orig_centre",sizeof("orig_centre")-1,4,offsetof(BufrSection1,orig_centre)},
+	{"bufr_master_table",sizeof("bufr_master_table")-1,2,offsetof(BufrSection1,bufr_master_table)},
+	{"orig_sub_centre",sizeof("orig_sub_centre")-1,2,offsetof(BufrSection1,orig_sub_centre)},
+	{"upd_seq_no",sizeof("upd_seq_no")-1,2,offsetof(BufrSection1,upd_seq_no)},
+	{"flag",sizeof("flag")-1,2,offsetof(BufrSection1,flag)},
+	{"msg_type",sizeof("msg_type")-1,2,offsetof(BufrSection1,msg_type)},
+	{"msg_inter_subtype",sizeof("msg_inter_subtype")-1,2,offsetof(BufrSection1,msg_inter_subtype)},
+	{"msg_local_subtype",sizeof("msg_local_subtype")-1,2,offsetof(BufrSection1,msg_local_subtype)},
+	{"master_table_version",sizeof("master_table_version")-1,2,offsetof(BufrSection1,master_table_version)},
+	{"local_table_version",sizeof("local_table_version")-1,2,offsetof(BufrSection1,local_table_version)},
+	{"year",sizeof("year")-1,2,offsetof(BufrSection1,year)},
+	{"month",sizeof("month")-1,2,offsetof(BufrSection1,month)},
+	{"day",sizeof("day")-1,2,offsetof(BufrSection1,day)},
+	{"hour",sizeof("hour")-1,2,offsetof(BufrSection1,hour)},
+	{"minute",sizeof("minute")-1,2,offsetof(BufrSection1,minute)},
+	{"second",sizeof("second")-1,2,offsetof(BufrSection1,second)},
+	{NULL,0,0,0},
+};
+
+typedef struct {
+	SV* relatedsv;
+	BufrSection1* s1;
+} mg_section1;
+
+static SV* new_section1(BufrSection1* s1, SV* relatedsv) {
+	HV *hash;
+	HV *stash;
+	SV *tie;
+	mg_section1* mgs1;
+	int i;
+
+	mgs1 = malloc(sizeof(mg_section1));
+	mgs1->relatedsv = relatedsv;
+	SvREFCNT_inc(relatedsv);
+	mgs1->s1 = s1;
+
+	hash = newHV();
+
+	tie = newRV_noinc((SV*)newHV());
+	stash = gv_stashpv("Geo::BUFR::EC::Section1", GV_ADD);
+	sv_bless(tie, stash);
+	hv_magic(hash, (GV*)tie, PERL_MAGIC_tied);
+
+	sv_magic((SV*)SvRV(tie), NULL, '~', (void*)mgs1, 0 );
+
+	for( i = 0; s1keys[i].key; i ++ ) {
+		/* be lazy... put the keys in and we don't have to write
+		 * our own iterator...
+		 */
+		hv_store((HV*)SvRV(tie), s1keys[i].key, s1keys[i].keylen, &PL_sv_undef, 0);
+	}
+
+	return newRV_noinc((SV*)hash);
+}
+
+static void free_section1(SV* hash) {
+	MAGIC* m = mg_find(hash,'~');
+	if( m && m->mg_ptr ) {
+		mg_section1* mgs1 = (mg_section1*) m->mg_ptr;
+		SvREFCNT_dec( mgs1->relatedsv );
+		free( mgs1 );
+	}
+}
+
+static BufrSection1* get_section1(SV* hash) {
+	MAGIC* m = mg_find(hash,'~');
+	if( m && m->mg_ptr ) {
+		mg_section1* mgs1 = (mg_section1*) m->mg_ptr;
+		if( mgs1 ) return mgs1->s1;
+	}
+	return NULL;
+}
+
+/**********************************************************************/
 /* Global Data */
 
 #define MY_CXT_KEY "Geo::BUFR::EC::_guts" XS_VERSION
@@ -91,19 +178,34 @@ DESTROY(tables)
 	CODE:
 		if( tables ) bufr_free_tables( tables );
 
-=head2 $tables->cmc()
+=head2 $tables->cmc([$tabled,$tableb])
 
 Loads the default set of CMC BUFR tables into C<$tables> as found by
 the C<BUFR_TABLES> environment variable. If missing falls back to the
-LibECBUFR default location.
+LibECBUFR default location. If files C<$tabled> or C<$tableb> are provided,
+CMC-formatted tables will be read from those (both local and master, as per CMC
+practice).
 
 =cut
 
 void
-cmc(tables)
+cmc(tables,tabled=NULL,tableb=NULL)
 		Geo::BUFR::EC::Tables tables
+		char* tabled
+		char* tableb
 	CODE:
-		bufr_load_cmc_tables( tables );
+		if( tabled || tableb ) {
+			if( tabled ) {
+				bufr_load_m_tableD( tables, tabled );
+				bufr_load_l_tableD( tables, tabled );
+			}
+			if( tableb ) {
+				bufr_load_m_tableB( tables, tableb );
+				bufr_load_l_tableB( tables, tableb );
+			}
+		} else {
+			bufr_load_cmc_tables( tables );
+		}
 
 =head2 $tables->lookup($desc)
 
@@ -183,7 +285,7 @@ char*
 description(eb)
 		Geo::BUFR::EC::Tables::Entry::B eb
 	ALIAS:
-		Geo::BUFR::EC::Tables::Entry::B::unit = 1
+		unit = 1
 	CODE:
 		if( ix == 1 ) {
 			RETVAL = eb->unit;
@@ -215,9 +317,9 @@ int
 descriptor(eb)
 		Geo::BUFR::EC::Tables::Entry::B eb
 	ALIAS:
-		Geo::BUFR::EC::Tables::Entry::B::scale = 1
-		Geo::BUFR::EC::Tables::Entry::B::reference = 2
-		Geo::BUFR::EC::Tables::Entry::B::nbits = 3
+		scale = 1
+		reference = 2
+		nbits = 3
 	CODE:
 		/* NOTE: af_nbits not implemented here... doesn't seem right to have that
 		 * in a table entry.
@@ -465,6 +567,22 @@ DESTROY(dts)
 	CODE:
 		if( dts ) bufr_free_dataset(dts);
 
+=head2 $dts->section1()
+
+Get the L<Geo::BUFR::EC::Section1> from the dataset.
+
+=cut
+
+SV*
+section1(dts)
+		Geo::BUFR::EC::Dataset dts
+	PREINIT:
+		SV* relatedsv = ST(0);
+	CODE:
+		RETVAL = new_section1(&(dts->s1), relatedsv);
+	OUTPUT:
+		RETVAL
+
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset     PREFIX = bufr_
 
 int
@@ -480,6 +598,134 @@ bufr_get_datasubset(dts,pos)
 	CLEANUP:
 		hold_related(ST(0), dtssv);
 
+MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Section1
+
+=head1 Geo::BUFR::EC::Section1
+
+Section 1 of a BUFR message. Can only be referenced from a dataset or
+(decoded) message object.
+
+This object is a hash containing the following fields: hour,
+master_table_version, month, flag, upd_seq_no, bufr_master_table, day,
+orig_centre, msg_inter_subtype, msg_type, second, orig_sub_centre, msg_local_subtype,
+local_table_version, minute, year.
+
+All fields are integers. Years are absolute values (not relative to 1900
+as per L<gmtime> convention), although century may be omitted for older editions.
+Month is indexed from 1 rather than zero.
+
+=cut
+
+void
+DESTROY(s1)
+		SV* s1
+	PPCODE:
+		free_section1( SvRV(ST(0)) );
+
+SV*
+FETCH(self, key)
+		SV* self;
+		SV* key;
+	PREINIT:
+		char   *k;
+		STRLEN klen;
+		BufrSection1* s1;
+		int i, val;
+	CODE:
+		s1 = get_section1(SvRV(self));
+		k = SvPV(key, klen);
+		for( i = 0; s1keys[i].key; i ++ ) {
+			if( klen==s1keys[i].keylen && !strncmp(k,s1keys[i].key,klen) ) {
+				char* p = (char*)(((char*)s1) + s1keys[i].offset);
+				if( s1keys[i].len == 2 ) {
+					val = *(short*)p;
+				} else if( s1keys[i].len == 4 ) {
+					val = *(int*)p;
+				} else {
+					croak("unhandled data length");
+				}
+				break;
+			}
+		}
+		if( s1keys[i].key==NULL ) RETVAL = &PL_sv_undef;
+		else RETVAL = newSViv(val);
+	OUTPUT:
+		RETVAL
+
+SV*
+STORE(self, key, value)
+		SV* self;
+		SV* key;
+		SV* value;
+	PREINIT:
+		char   *k;
+		STRLEN klen;
+		BufrSection1* s1;
+		int val;
+		int i;
+	CODE:
+		s1 = get_section1(SvRV(self));
+		k = SvPV(key, klen);
+		for( i = 0; s1keys[i].key; i ++ ) {
+			if( klen==s1keys[i].keylen && strEQ(k,s1keys[i].key) ) {
+				char* p = (char*)(((char*)s1) + s1keys[i].offset);
+				if( s1keys[i].len == 2 ) {
+					short* d = (short*)p;
+					val = *d;
+					*d = SvIV(value);
+				} else if( s1keys[i].len == 4 ) {
+					int* d = (int*)p;
+					val = *d;
+					*d = SvIV(value);
+				} else {
+					croak("unhandled data length");
+				}
+				break;
+			}
+		}
+		if( s1keys[i].key==NULL ) RETVAL = &PL_sv_undef;
+		else RETVAL = newSViv(val);
+	OUTPUT:
+		RETVAL
+
+bool
+EXISTS(self, key)
+   SV* self;
+   SV* key;
+CODE:
+	RETVAL = hv_exists_ent((HV*)SvRV(self), key, 0);
+OUTPUT:
+   RETVAL
+
+SV*
+FIRSTKEY(self)
+   SV* self;
+PREINIT:
+   HE *he;
+PPCODE:
+   self = SvRV(self);
+   hv_iterinit((HV*)self);
+   if (he = hv_iternext((HV*)self))
+      {
+      EXTEND(sp, 1);
+      PUSHs(hv_iterkeysv(he));
+      }
+
+SV*
+NEXTKEY(self, lastkey)
+   SV* self;
+   SV* lastkey;
+PREINIT:
+   HE *he;
+PPCODE:
+   self = SvRV(self);
+   if (he = hv_iternext((HV*)self))
+      {
+      EXTEND(sp, 1);
+      PUSHs(hv_iterkeysv(he));
+      }
+
+################################################################################
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Message
 
 =head1 Geo::BUFR::EC::Message
@@ -539,6 +785,36 @@ DESTROY(msg)
 		Geo::BUFR::EC::Message msg
 	CODE:
 		if( msg ) bufr_free_message(msg);
+
+=head2 $message->section1()
+
+Get the L<Geo::BUFR::EC::Section1> from the C<$message>.
+
+=cut
+
+SV*
+section1(msg)
+		Geo::BUFR::EC::Message msg
+	PREINIT:
+		SV* relatedsv = ST(0);
+	CODE:
+		RETVAL = new_section1(&(msg->s1), relatedsv);
+	OUTPUT:
+		RETVAL
+
+=head2 $message->edition()
+
+Get the BUFR edition value from the C<$message>.
+
+=cut
+
+int
+edition(msg)
+		Geo::BUFR::EC::Message msg
+	CODE:
+		RETVAL = msg->edition;
+	OUTPUT:
+		RETVAL
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DataSubset
 
@@ -676,8 +952,8 @@ set_value(d, sv=0)
 		Geo::BUFR::EC::Descriptor d
 		SV* sv
 	ALIAS:
-		Geo::BUFR::EC::Descriptor::get = 1
-		Geo::BUFR::EC::Descriptor::set = 2
+		get = 1
+		set = 2
 	INIT:
 		BufrValue* bv = d->value;
 	CODE:
@@ -802,13 +1078,13 @@ int
 is_descriptor(d)
 		Geo::BUFR::EC::Descriptor d
 	ALIAS:
-		Geo::BUFR::EC::Descriptor::is_qualifier = 1
-		Geo::BUFR::EC::Descriptor::is_table_b = 2
-		Geo::BUFR::EC::Descriptor::is_table_d = 3
-		Geo::BUFR::EC::Descriptor::is_local = 4
-		Geo::BUFR::EC::Descriptor::is_missing = 5
-		Geo::BUFR::EC::Descriptor::is_table_c = 6
-		Geo::BUFR::EC::Descriptor::is_replicator = 7
+		is_qualifier = 1
+		is_table_b = 2
+		is_table_d = 3
+		is_local = 4
+		is_missing = 5
+		is_table_c = 6
+		is_replicator = 7
 	CODE:
 		if( ix == 5 ) {
 			if( d->value ) {
@@ -874,11 +1150,11 @@ int
 flags(d)
 		Geo::BUFR::EC::Descriptor d
 	ALIAS:
-		Geo::BUFR::EC::Descriptor::is_class31 = FLAG_CLASS31
-		Geo::BUFR::EC::Descriptor::is_expanded = FLAG_EXPANDED
-		Geo::BUFR::EC::Descriptor::is_skipped = FLAG_SKIPPED
-		Geo::BUFR::EC::Descriptor::is_class33 = FLAG_CLASS33
-		Geo::BUFR::EC::Descriptor::is_ignored = FLAG_IGNORED
+		is_class31 = FLAG_CLASS31
+		is_expanded = FLAG_EXPANDED
+		is_skipped = FLAG_SKIPPED
+		is_class33 = FLAG_CLASS33
+		is_ignored = FLAG_IGNORED
 	CODE:
 		RETVAL = ix ? (d->flags & ix) : d->flags;
 	OUTPUT:

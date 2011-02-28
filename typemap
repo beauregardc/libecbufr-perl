@@ -9,5 +9,6 @@ Geo::BUFR::EC::Sequence	T_PTROBJ
 Geo::BUFR::EC::Template	T_PTROBJ
 Geo::BUFR::EC::Descriptor	T_PTROBJ
 Geo::BUFR::EC::Value	T_PTROBJ
+Geo::BUFR::EC::Section1 T_HV
 int32_t	T_IV
 int64_t	T_IV

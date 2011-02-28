@@ -23,6 +23,14 @@ close $f;
 my $msg = Geo::BUFR::EC::Message->fromString($bulletin);
 ok( defined $msg );
 
+my $s1 = $msg->section1();
+ok( defined $s1 );
+
+print "Section 1 keys are:", join(', ', keys(%{$s1})), "\n";
+
+printf "Message from %04d-%02d-%02d %02d:%02d:%02d\n",
+	@{$s1}{qw/year month day hour minute second/};
+
 $tables = Geo::BUFR::EC::Tables->new();
 ok( defined $tables );
 
