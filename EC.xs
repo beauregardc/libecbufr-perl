@@ -593,6 +593,17 @@ Expands a descriptors sequence of a datasubset by resolving any Table D,
 replications or delayed replications once the delayed replication 
 counter has been set (value of descriptor 31001 that follows).
 
+	my $dts = Geo::BUFR::EC::Dataset->new($tmpl);
+	my $ds = Geo::BUFR::EC::DataSubset->new($dts);
+
+	my $pos = $ds->find_descriptor(31001);
+	my $desc = $ds->get_descriptor($pos);
+	$desc->set(8);
+	$dts->expand_datasubset();
+
+	# now we'll see eight copies in $ds of whatever was being
+	# replicated
+
 =cut
 
 int
