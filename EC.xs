@@ -569,7 +569,9 @@ DESTROY(dts)
 
 =head2 $dts->section1()
 
-Get the L<Geo::BUFR::EC::Section1> from the dataset.
+Get the L<Geo::BUFR::EC::Section1> from the dataset. Note that this I<is>
+the DataSet's section 1, not just a copy, and changing it will change the
+dataset. It's expected the user will do this for encoding purposes.
 
 =cut
 
@@ -585,12 +587,40 @@ section1(dts)
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset     PREFIX = bufr_
 
+=head2 $dataset->expand_datasubset($pos=0)
+
+Expands a descriptors sequence of a datasubset by resolving any Table D,
+replications or delayed replications once the delayed replication 
+counter has been set (value of descriptor 31001 that follows).
+
+=cut
+
+int
+bufr_expand_datasubset(dts,pos=0)
+		Geo::BUFR::EC::Dataset dts
+		int pos
+
+=head2 $dataset->count_datasubset()
+
+Returns the number of datasubsets in the C<$dataset>.
+
+=cut
+
 int
 bufr_count_datasubset(dts)
 		Geo::BUFR::EC::Dataset dts
 
+=head2 $dataset->get_datasubset($pos=0)
+
+Get the L<Geo::BUFR::EC::DataSubset> object in the specified position C<$pos>.
+Note that this is not a copy, and changing the values in the subset will change
+the message. Obviously, this is expected while encoding. Positions are indexed
+from zero.
+
+=cut
+
 Geo::BUFR::EC::DataSubset
-bufr_get_datasubset(dts,pos)
+bufr_get_datasubset(dts,pos=0)
 		Geo::BUFR::EC::Dataset dts
 		int pos
 	PREINIT:

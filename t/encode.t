@@ -72,7 +72,7 @@ ok( defined $message );
 my $s = $message->toString();
 ok( defined $s );
 
-open (my $fh, '>', 't/encoded.bufr') || die $!;
+open (my $fh, '>', 't/encode.bufr') || die $!;
 print $fh $s;
 close $fh;
 
