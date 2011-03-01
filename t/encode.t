@@ -35,15 +35,16 @@ ok( defined $dts );
 my $s1 = $dts->section1();
 ok( defined $s1 );
 
-my @t = gmtime(time());
+my $now = time();
+my @t = gmtime($now);
 @{$s1}{qw/year month second minute hour day/}
 	= ($t[5]+1900, $t[4]+1, @t[0 .. 3]);
 
-for( my $i = 0; $i < 4; $i ++ ) {
+for( my $i = 0; $i < 4; $i ++, $now += 12 ) {
 	my $ds = Geo::BUFR::EC::DataSubset->new($dts);
 	ok(defined $ds);
 
-	@t = gmtime(time());
+	@t = gmtime($now);
 
 	# FIXME: we could probably do this nicer if we exposed more
 	# of the decoding functions in the API...
@@ -63,8 +64,6 @@ for( my $i = 0; $i < 4; $i ++ ) {
 			$d->set( $t[0] );
 		}
 	}
-
-	sleep(5);
 }
 
 my $message = Geo::BUFR::EC::Message->encode($dts);
