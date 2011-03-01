@@ -857,7 +857,26 @@ DESTROY(ds)
 		 */ 
 		release_related(ST(0));
 
-MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::DataSubset  PREFIX = bufr_datasubset_
+=head2 $subset->find_descriptor($desc,$startpos=0)
+
+Finds a descriptor C<$desc>, returning the position in the datasubset (for
+retrieval via L<Geo::BUFR::EC::DataSubset::get_descriptor>) or C<undef> on
+failure.
+
+=cut
+
+int
+find_descriptor(ds,desc,startpos=0)
+		Geo::BUFR::EC::DataSubset ds
+		int desc
+		int startpos
+	CODE:
+		RETVAL = bufr_subset_find_descriptor(ds,desc,startpos);
+		if( RETVAL < 0 ) XSRETURN_UNDEF;
+	OUTPUT:
+		RETVAL
+
+MODULE = Geo::BUFR::EC PACKAGE = Geo::BUFR::EC::DataSubset PREFIX = bufr_datasubset_
 
 int
 bufr_datasubset_count_descriptor(ds)

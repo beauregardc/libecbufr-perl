@@ -6,7 +6,8 @@ ppport.h
 README
 COPYING.LESSER
 COPYING
+lib/Geo/BUFR/EC.pm
 t/Geo-BUFR-EC.t
 t/decode.t
 t/encode.t
-lib/Geo/BUFR/EC.pm
+t/find.t
