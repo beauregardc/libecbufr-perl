@@ -1,6 +1,6 @@
 package Geo::BUFR::EC;
 
-use 5.010001;
+use 5.008000;
 use strict;
 use warnings;
 
