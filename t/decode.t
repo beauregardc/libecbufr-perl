@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More;
+use Test::More qw/no_plan/;
 BEGIN { use_ok('Geo::BUFR::EC') };
 
 #########################
@@ -71,7 +71,5 @@ for( my $sno = 0; $sno < $nds; $sno ++ ) {
 		print "\n";
 	}
 }
-
-done_testing();
 
 exit 0;

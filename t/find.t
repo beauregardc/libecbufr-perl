@@ -1,17 +1,5 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl Geo-BUFR-EC.t'
-
-#########################
-
-# change 'tests => 1' to 'tests => last_test_to_print';
-
-use Test::More;
+use Test::More qw/no_plan/;
 BEGIN { use_ok('Geo::BUFR::EC') };
-
-#########################
-
-# Insert your test code below, the Test::More module is use()ed here so read
-# its man page ( perldoc Test::More ) for help writing this test script.
 
 $ENV{BUFR_TABLES} = '/usr/share/libecbufr/';
 
@@ -49,7 +37,5 @@ while(defined $pos) {
 
 ok( $n == 8 );
 ok( not defined $pos );
-
-done_testing();
 
 exit 0;

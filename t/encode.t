@@ -5,7 +5,7 @@
 
 # change 'tests => 1' to 'tests => last_test_to_print';
 
-use Test::More;
+use Test::More qw/no_plan/;
 BEGIN { use_ok('Geo::BUFR::EC') };
 
 #########################
@@ -76,5 +76,4 @@ open (my $fh, '>', 't/encode.bufr') || die $!;
 print $fh $s;
 close $fh;
 
-done_testing();
 exit 0;

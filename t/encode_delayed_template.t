@@ -1,6 +1,6 @@
 # see encode_delayed.t for the basics of what we're trying here
 
-use Test::More;
+use Test::More qw/no_plan/;
 BEGIN { use_ok('Geo::BUFR::EC') };
 
 $ENV{BUFR_TABLES} = '/usr/share/libecbufr/';
@@ -60,5 +60,4 @@ open (my $fh, '>', 't/encode_delayed_template.bufr') || die $!;
 print $fh $s;
 close $fh;
 
-done_testing();
 exit 0;
