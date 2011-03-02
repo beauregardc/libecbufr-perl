@@ -8,6 +8,7 @@ COPYING.LESSER
 COPYING
 typemap
 lib/Geo/BUFR/EC.pm
+t/sample.bufr
 t/Geo-BUFR-EC.t
 t/decode.t
 t/encode.t
