@@ -11,6 +11,9 @@ DEPENDENCIES
 
 Requires the LibECBUFR C library.
 
+Requires the ExtUtils::PkgConfig perl module to find the LibECBUFR
+C library.
+
 INSTALLATION
 
 To install this module type the following:
