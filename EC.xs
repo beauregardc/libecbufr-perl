@@ -502,10 +502,25 @@ This object is a descriptor with a (possibly empty) list of associated values.
 Mainly used in template building where a sequence needs a set of values. Value
 may, of course, be "missing".
 
+=head2 Geo::BUFR::EC::DescValue->new($desc,[@values]);
+
+Creates a new L<Geo::BUFR::EC::DescValue> object. By default the values
+will be undefined/missing. The C<@values> list is expected to contain
+L<Geo::BUFR::EC::Value> objects.
+
+Note that L<Geo::BUFR::EC::Value> cannot be instantiated directly. This is
+because they need to match the type definitions defined in the table and hence
+need to be associated with a descriptor. Hence the following approach would be
+necessary to create a L<Geo::BUFR::EC::DescValue> with a non-missing value:
+
+	my $d = Geo::BUFR::EC::Descriptor->new($tables,$desc);
+	$d->set( $value );
+	my $dv = Geo::BUFR::EC::DescValue->new( $desc, $d->value() );
+
 =cut
 
 Geo::BUFR::EC::DescValue
-new(packname="Geo::BUFR::EC::DescValue",desc=0,...)
+new(packname="Geo::BUFR::EC::DescValue",desc,...)
       char* packname
 		int desc
 	PREINIT:
@@ -972,8 +987,7 @@ descriptor(d)
 
 =head2 $desc->value()
 
-Returns the L<Geo::BUFR::EC::Value> value for C<$desc>. This should be necessary
-unless very precise control over values are required.
+Returns the L<Geo::BUFR::EC::Value> value for C<$desc>.
 
 =cut 
 
