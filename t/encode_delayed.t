@@ -13,7 +13,12 @@ ok( defined $tmpl );
 # template with a delayed replication of a channel number.
 $tmpl->add_DescValue(Geo::BUFR::EC::DescValue->new(101000));
 $tmpl->add_DescValue(Geo::BUFR::EC::DescValue->new(31002));
-$tmpl->add_DescValue(Geo::BUFR::EC::DescValue->new(5042));
+
+my $d = Geo::BUFR::EC::Descriptor->new($tables,5042);
+$d->set(1);
+my $v = $d->value();
+$tmpl->add_DescValue(
+	Geo::BUFR::EC::DescValue->new($d->descriptor(),$v));
 $tmpl->finalize();
 
 my $dts = Geo::BUFR::EC::Dataset->new($tmpl);

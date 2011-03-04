@@ -132,6 +132,15 @@ static BufrSection1* get_section1(SV* hash) {
 }
 
 /**********************************************************************/
+static void my_output_handler( const char* msg ) {
+	/* FIXME: might be excessive */
+	warn("%s",msg);
+}
+
+static void my_debug_handler( const char* msg ) {
+}
+
+/**********************************************************************/
 /* Global Data */
 
 #define MY_CXT_KEY "Geo::BUFR::EC::_guts" XS_VERSION
@@ -152,7 +161,10 @@ BOOT:
        to be initialised, do it here.
      */
 
-	 bufr_begin_api();
+	bufr_begin_api();
+
+	bufr_set_output_handler( my_output_handler );
+	bufr_set_debug_handler( my_debug_handler );
 }
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Tables
@@ -196,12 +208,20 @@ cmc(tables,tabled=NULL,tableb=NULL)
 	CODE:
 		if( tabled || tableb ) {
 			if( tabled ) {
-				bufr_load_m_tableD( tables, tabled );
-				bufr_load_l_tableD( tables, tabled );
+				if( bufr_load_m_tableD( tables, tabled ) ) {
+					warn("Failed to load Table D master %s", tabled);
+				}
+				if( bufr_load_l_tableD( tables, tabled ) ) {
+					warn("Failed to load Table D local %s", tabled);
+				}
 			}
 			if( tableb ) {
-				bufr_load_m_tableB( tables, tableb );
-				bufr_load_l_tableB( tables, tableb );
+				if( bufr_load_m_tableB( tables, tableb ) ) {
+					warn("Failed to load Table B master %s", tableb);
+				}
+				if( bufr_load_l_tableB( tables, tableb ) ) {
+					warn("Failed to load Table B local %s", tableb);
+				}
 			}
 		} else {
 			bufr_load_cmc_tables( tables );
@@ -531,8 +551,9 @@ new(packname="Geo::BUFR::EC::DescValue",desc,...)
 		bufr_valloc_DescValue(RETVAL, items-2);
 		RETVAL->descriptor = desc;
 		for( i = 2; i < items; i ++ ) {
-			if( sv_isobject(ST(i)) && sv_derived_from(ST(i), "Geo::BUFR::EC::Value") ) {
-				BufrValue* d = INT2PTR(BufrValue*,SvIV((SV*)SvRV(ST(i))));
+			if (sv_derived_from(ST(i), "Geo::BUFR::EC::Value")) {
+				IV tmp = SvIV((SV*)SvRV(ST(i)));
+				BufrValue* d = INT2PTR(BufrValue*,tmp);
 				RETVAL->values[i-2] = bufr_duplicate_value(d);
 			} else {
 				croak("Expecting a Geo::BUFR::EC::Value");
@@ -971,7 +992,8 @@ The desired descriptor must exist in the C<$tables>.
 =cut
 
 Geo::BUFR::EC::Descriptor
-new(tables,desc)
+new(packname="Geo::BUFR::EC::Descriptor",tables,desc)
+		char* packname
 		Geo::BUFR::EC::Tables tables
 		int desc
 	CODE:
@@ -1011,6 +1033,7 @@ value(d)
 	PREINIT:
 		SV* relatedsv = ST(0);
 	CODE:
+		if( d->value == NULL ) XSRETURN_UNDEF;
 		RETVAL = d->value;
 	OUTPUT:
 		RETVAL
@@ -1045,6 +1068,9 @@ set_value(d, sv=0)
 	INIT:
 		BufrValue* bv = d->value;
 	CODE:
+		if( bv == NULL ) {
+			d->value = bv = bufr_mkval_for_descriptor(d);
+		}
 		if( bv == NULL ) XSRETURN_UNDEF;
 
 		if( ix == 2 && sv ) {
