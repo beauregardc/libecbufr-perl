@@ -963,7 +963,21 @@ MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Descriptor
 BUFR descriptor object. May or may not have an associated value depending on the
 kind of descriptor.
 
+=head2 Geo::BUFR::EC::Descriptor->new($tables,$desc)
+
+Creates a new L<Geo::BUFR::EC::Descriptor> for a given descriptor C<$desc>.
+The desired descriptor must exist in the C<$tables>.
+
 =cut
+
+Geo::BUFR::EC::Descriptor
+new(tables,desc)
+		Geo::BUFR::EC::Tables tables
+		int desc
+	CODE:
+		RETVAL = bufr_create_descriptor(tables, desc);
+	OUTPUT:
+		RETVAL
 
 void
 DESTROY(d)
