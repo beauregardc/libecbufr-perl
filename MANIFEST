@@ -15,3 +15,4 @@ t/encode.t
 t/find.t
 t/encode_delayed.t
 t/encode_delayed_template.t
+t/encode_tablec.t

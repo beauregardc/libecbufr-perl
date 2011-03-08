@@ -132,6 +132,97 @@ static BufrSection1* get_section1(SV* hash) {
 }
 
 /**********************************************************************/
+SV* bufr_value_getset(BufrValue* bv, SV* setsv) {
+	SV* rv = NULL;
+
+	/* we always return a value... */
+	if( bufr_value_is_missing(bv) ) {
+		rv = &PL_sv_undef;
+	} else {
+		switch( bv->type ) {
+			case VALTYPE_INT8:
+			case VALTYPE_INT32:
+			case VALTYPE_INT64:
+				rv = newSViv(bufr_value_get_int64(bv));
+				break;
+			case VALTYPE_FLT32:
+			case VALTYPE_FLT64:
+				rv = newSVnv(bufr_value_get_double(bv));
+				break;
+			case VALTYPE_STRING: {
+				int len;
+				const char* s = bufr_value_get_string(bv,&len);
+				rv = newSVpvn(s,len);
+				break;
+			}
+			default:
+				rv = NULL;
+				break;
+		}
+	}
+	if( setsv ) {
+		/* assign second param to value */
+		switch( bv->type ) {
+			case VALTYPE_INT64:
+				if( setsv == &PL_sv_undef ) {
+					bufr_value_set_int64(bv,bufr_missing_int());
+				} else {
+					bufr_value_set_int64(bv,SvIV(setsv));
+				}
+				break;
+			case VALTYPE_INT8:
+			case VALTYPE_INT32:
+				if( setsv == &PL_sv_undef ) {
+					bufr_value_set_int32(bv,bufr_missing_int());
+				} else {
+					bufr_value_set_int32(bv,SvIV(setsv));
+				}
+				break;
+			case VALTYPE_FLT32:
+				if( setsv == &PL_sv_undef ) {
+					bufr_value_set_float(bv,bufr_missing_float());
+				} else {
+					bufr_value_set_float(bv,SvNV(setsv));
+				}
+				break;
+			case VALTYPE_FLT64:
+				if( setsv == &PL_sv_undef ) {
+					bufr_value_set_double(bv,bufr_missing_double());
+				} else {
+					bufr_value_set_double(bv,SvNV(setsv));
+				}
+				break;
+			case VALTYPE_STRING: {
+				STRLEN l;
+				const char* s = SvPV(setsv,l);
+				if( setsv == &PL_sv_undef || s==NULL ) {
+					/* This assumes the value of the string is going to have
+					 * a length which is meaningful for a missing value.
+					 */
+					char *tmpbuf;
+					int len;
+					const char* s = bufr_value_get_string(bv,&len);
+					tmpbuf = (char *)malloc( (len+1)*sizeof(char) );
+					if( tmpbuf == NULL ) croak("malloc failed!");
+					bufr_missing_string( tmpbuf, len );
+					bufr_value_set_string(bv,tmpbuf,len);
+					free( tmpbuf );
+				} else {
+					bufr_value_set_string(bv,s,l);
+				}
+				break;
+			}
+			default:
+				/* the return code from this function will indicate failure... */
+				assert( rv == NULL );
+				break;
+		}
+	}
+
+	return rv;
+}
+
+/**********************************************************************/
 static void my_output_handler( const char* msg ) {
 	/* FIXME: might be excessive */
 	warn("%s",msg);
@@ -441,7 +532,8 @@ A BUFR Template. Primarily used to generate new messages
 =head2 Geo::BUFR::EC::Template->new($tables,edition=4,...)
 
 Instantiate a new template using the specified C<$tables> and (optional)
-edition. A list of L<Geo::BUFR::EC::DescValue> objects may follow.
+edition. A list of L<Geo::BUFR::EC::DescValue> objects may be passed in
+as a list, and more can be added later via the C<add_DescValue> method.
 
 Note that the template must be finalized before being used.
 
@@ -528,14 +620,32 @@ Creates a new L<Geo::BUFR::EC::DescValue> object. By default the values
 will be undefined/missing. The C<@values> list is expected to contain
 L<Geo::BUFR::EC::Value> objects.
 
-Note that L<Geo::BUFR::EC::Value> cannot be instantiated directly. This is
-because they need to match the type definitions defined in the table and hence
-need to be associated with a descriptor. Hence the following approach would be
-necessary to create a L<Geo::BUFR::EC::DescValue> with a non-missing value:
+Note that L<Geo::BUFR::EC::Value> is never instantiated directly; a descriptor
+of some sort is needed to determine type information for a value, and hence some
+association with a table is necessary along the way (with the exception of some
+Table C descriptors like 2-05-YYY).  Hence the following
+approaches would be valid to create a L<Geo::BUFR::EC::DescValue> for
+a Table B descriptor with a non-missing value:
 
 	my $d = Geo::BUFR::EC::Descriptor->new($tables,$desc);
 	$d->set( $value );
 	my $dv = Geo::BUFR::EC::DescValue->new( $desc, $d->value() );
+
+	my $dv2 = Geo::BUFR::EC::DescValue->new( $desc2 );
+	$dv2->add_Value($tables->lookup($dv2->descriptor()))->set($value2);
+
+However, in some cases a L<Geo::BUFR::EC::Descriptor> can't be
+instantiated for a particular BUFR descriptor (i.e. Table C or Table
+B/D descriptors not yet in the tables), in which case it's necessary
+to manually create a value for the L<Geo::BUFR::EC::DescValue> object
+using the L<Geo::BUFR::EC::DescValue::add_Value()> method.
+
+	my $dv = Geo::BUFR::EC::DescValue->new( $desc );
+	...
+	$dv->add_Value()->set($value);
+
+L<Geo::BUFR::EC::DescValue> value sequences are also used for searching. More on
+that later.
 
 =cut
 
@@ -543,20 +653,22 @@ Geo::BUFR::EC::DescValue
 new(packname="Geo::BUFR::EC::DescValue",desc,...)
       char* packname
 		int desc
-	PREINIT:
-		int i;
 	CODE:
 		RETVAL = malloc(sizeof(BufrDescValue));
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
-		bufr_valloc_DescValue(RETVAL, items-2);
+		bufr_init_DescValue( RETVAL );
 		RETVAL->descriptor = desc;
-		for( i = 2; i < items; i ++ ) {
-			if (sv_derived_from(ST(i), "Geo::BUFR::EC::Value")) {
-				IV tmp = SvIV((SV*)SvRV(ST(i)));
-				BufrValue* d = INT2PTR(BufrValue*,tmp);
-				RETVAL->values[i-2] = bufr_duplicate_value(d);
-			} else {
-				croak("Expecting a Geo::BUFR::EC::Value");
+		if( items > 2 ) {
+			int i;
+			bufr_valloc_DescValue(RETVAL, items-2);
+			for( i = 2; i < items; i ++ ) {
+				if (sv_derived_from(ST(i), "Geo::BUFR::EC::Value")) {
+					IV tmp = SvIV((SV*)SvRV(ST(i)));
+					BufrValue* d = INT2PTR(BufrValue*,tmp);
+					RETVAL->values[i-2] = bufr_duplicate_value(d);
+				} else {
+					croak("Expecting a Geo::BUFR::EC::Value");
+				}
 			}
 		}
 	OUTPUT:
@@ -569,13 +681,125 @@ DESTROY(dv)
 		bufr_vfree_DescValue(dv);
 		free( dv );
 
+=head2 $dv->descriptor($newval=0)
+
+Returns the descriptor for the C<$dv>. Optionally, the caller
+can provide a new descriptor C<$newval>, in which case the old value will be
+returned.
+
+=cut 
+
 int
-descriptor(dv)
+descriptor(dv,newval=0)
 		Geo::BUFR::EC::DescValue dv
+		int newval
 	CODE:
 		RETVAL = dv->descriptor;
+		if( newval ) dv->descriptor = newval;
 	OUTPUT:
 		RETVAL
+
+=head2 $dv->value($pos=0)
+
+Returns a L<Geo::BUFR::EC::Value> value for C<$dv>. Since more than
+one value is possible, an optional C<$pos> parameter is provided.
+
+Note that positions are indexed from zero.
+
+=cut 
+
+Geo::BUFR::EC::Value
+value(dv,pos=0)
+		Geo::BUFR::EC::DescValue dv
+		int pos
+	PREINIT:
+		SV* relatedsv = ST(0);
+	CODE:
+		if( dv->values == NULL ) XSRETURN_UNDEF;
+		if( pos < 0 || pos >= dv->nbval ) XSRETURN_UNDEF;
+		RETVAL = dv->values[pos];
+	OUTPUT:
+		RETVAL
+	CLEANUP:
+		hold_related(ST(0),relatedsv);
+
+=head2 $dv->count_values()
+
+Returns the number of values for a given L<Geo::BUFR::EC::DescValue>. Note that
+there's a difference between having a value and having the right kind of value
+for a descriptor, or having a usable value.
+
+=cut
+
+int
+count_values(dv)
+		Geo::BUFR::EC::DescValue dv
+	CODE:
+		RETVAL = dv->nbval;
+	OUTPUT:
+		RETVAL
+
+=head2 $dv->add_Value($desc=0)
+
+Creates a new L<Geo::BUFR::EC::Value> at the end of the list and returns it.
+The descriptor C<$desc> can be either a L<Geo::BUFR::EC::Tables::Entry::B> object or
+a Table C operator. If not provided, the existing C<$dv> descriptor will be
+used, if possible. Only _very_ rarely would the descriptor argument be provided
+which would not match that of the L<Geo::BUFR::EC::DescValue> descriptor itself.
+
+Note that the only usable Table C operator is presently 2-05-YYY.
+
+=cut
+
+Geo::BUFR::EC::Value
+add_Value(dv,desc=NULL)
+		Geo::BUFR::EC::DescValue dv
+		SV* desc
+	PREINIT:
+		SV* relatedsv = ST(0);
+		int pos;
+		int          vlen;
+		ValueType    vtype;
+		BufrValue*   bv = NULL;
+	CODE:
+		if( items == 2 ) {
+			if( sv_isobject(desc) && sv_derived_from(desc, "Geo::BUFR::EC::Tables::Entry::B") ) {
+				EntryTableB* e = INT2PTR(EntryTableB*,SvIV((SV*)SvRV(desc)));
+				vtype = bufr_encoding_to_valtype( &(e->encoding) );
+				vlen = e->encoding.nbits / 8;
+			} else {
+				int idesc = SvIV(desc);
+				vtype = bufr_datatype_to_valtype(
+					bufr_descriptor_to_datatype( NULL, NULL, idesc, &vlen ), 32, 0 );
+			}
+		} else {
+			vtype = bufr_datatype_to_valtype(
+				bufr_descriptor_to_datatype( NULL, NULL, dv->descriptor, &vlen ), 32, 0 );
+		}
+
+		/* try to create a value. Note that depending on the type/len, we might
+		 * create something useless. Rather than trying to guess which combos
+		 * give us junk (i.e. deep knowledge of library internals), just try it
+		 * and toss anything we can't use.
+		 */
+		bv = bufr_create_value( vtype );
+		if( bv == NULL ) XSRETURN_UNDEF;
+		if( bv->type == VALTYPE_UNDEFINE ) {
+			bufr_free_value( bv );
+			XSRETURN_UNDEF;
+		}
+
+		/* Got a value, add it to the list and pass it back */
+		pos = dv->nbval;
+		if( 0!=bufr_vgrow_DescValue(dv,dv->nbval+1) ) {
+			bufr_free_value( bv );
+			XSRETURN_UNDEF;
+		}
+		RETVAL = dv->values[pos] = bv;
+	OUTPUT:
+		RETVAL
+	CLEANUP:
+		hold_related(ST(0),relatedsv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset
 
@@ -1046,7 +1270,7 @@ Returns scalar value for the descriptor C<$desc>. The resulting scalar will
 match the type of the object as closely as possible. Missing BUFR values will be
 returned as C<undef>.
 
-Note that a L<Geo::BUFR::EC::Descriptor> object may not have an associated value
+Note that a L<Geo::BUFR::EC::Descriptor> object may not have a value
 (i.e. Table D descriptors), in which case this function will also return
 C<undef>. C<< $desc->is_missing() >> can be used to determine the difference.
 
@@ -1054,7 +1278,7 @@ C<undef>. C<< $desc->is_missing() >> can be used to determine the difference.
 
 Set the value of C<$desc> to the scalar C<$val>. The scalar value will be mapped
 to the descriptor type as closely as possible. To store a missing value, use
-C<undef>. Returns the same as C<< $desc->get() >>.
+C<undef>. Returns the old value.
 
 =cut 
 
@@ -1072,86 +1296,8 @@ set_value(d, sv=0)
 			d->value = bv = bufr_mkval_for_descriptor(d);
 		}
 		if( bv == NULL ) XSRETURN_UNDEF;
-
-		if( ix == 2 && sv ) {
-			/* assign second param to value */
-			switch( bv->type ) {
-				case VALTYPE_INT64:
-					if( sv == &PL_sv_undef ) {
-						bufr_value_set_int64(bv,bufr_missing_int());
-					} else {
-						bufr_value_set_int64(bv,SvIV(sv));
-					}
-					break;
-				case VALTYPE_INT8:
-				case VALTYPE_INT32:
-					if( sv == &PL_sv_undef ) {
-						bufr_value_set_int32(bv,bufr_missing_int());
-					} else {
-						bufr_value_set_int32(bv,SvIV(sv));
-					}
-					break;
-				case VALTYPE_FLT32:
-					if( sv == &PL_sv_undef ) {
-						bufr_value_set_float(bv,bufr_missing_float());
-					} else {
-						bufr_value_set_float(bv,SvNV(sv));
-					}
-					break;
-				case VALTYPE_FLT64:
-					if( sv == &PL_sv_undef ) {
-						bufr_value_set_double(bv,bufr_missing_double());
-					} else {
-						bufr_value_set_double(bv,SvNV(sv));
-					}
-					break;
-				case VALTYPE_STRING: {
-					STRLEN l;
-					const char* s = SvPV(sv,l);
-					if( sv == &PL_sv_undef || s==NULL ) {
-                  int len=d->encoding.nbits/8;
-                  char *tmpbuf = (char *)malloc( (len+1)*sizeof(char) );
-						if( tmpbuf == NULL ) croak("malloc failed!");
-                  bufr_missing_string( tmpbuf, len );
-                  bufr_descriptor_set_svalue( d, tmpbuf );
-                  free( tmpbuf );
-					} else {
-						bufr_value_set_string(bv,s,l);
-					}
-					break;
-				}
-				default:
-					croak("Unknown/unhandled BUFR value type");
-					break;
-			}
-		}
-
-		/* return appropriate value */
-		if( bufr_value_is_missing(bv) ) {
-			XSRETURN_UNDEF;
-		}
-		switch( bv->type ) {
-			case VALTYPE_INT8:
-			case VALTYPE_INT32:
-			case VALTYPE_INT64:
-				RETVAL = newSViv(bufr_descriptor_get_ivalue(d));
-				break;
-			case VALTYPE_FLT32:
-				RETVAL = newSVnv(bufr_descriptor_get_fvalue(d));
-				break;
-			case VALTYPE_FLT64:
-				RETVAL = newSVnv(bufr_descriptor_get_dvalue(d));
-				break;
-			case VALTYPE_STRING: {
-				int len;
-				const char* s = bufr_descriptor_get_svalue(d,&len);
-				RETVAL = newSVpvn(s,len);
-				break;
-			}
-			default:
-				croak("Unknown/unhandled BUFR value type");
-				break;
-		}
+		RETVAL = bufr_value_getset(bv,(ix==2) ? sv : NULL);
+		if( RETVAL == NULL ) croak("unhandled value type");
 	OUTPUT:
 		RETVAL
 
@@ -1312,7 +1458,7 @@ MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Value
 
 Low-level access to BUFR values. Most users should be fine with the
 C<Geo::BUFR::EC::Descriptor> methods. Particularly for string access where the
-length of the string requires additional informaiton.
+length of the string requires additional information.
 
 =cut
 
@@ -1321,6 +1467,32 @@ DESTROY(bv)
 		Geo::BUFR::EC::Value bv
 	CODE:
 		if( !release_related(ST(0)) ) bufr_free_value(bv);
+
+=head2 $bv->get()
+
+Returns the scalar value of the C<$bv>. As per convention, C<undef> indicates a
+"missing" bufr value.
+
+=head2 $bv->set($value)
+
+Sets a value. Equivalent to L<Geo::BUFR::EC::Descriptor::set>.
+
+Returns the old value, if any (which may be C<undef>, indicating "missing").
+
+=cut
+
+SV*
+set_value(bv, sv=0)
+		Geo::BUFR::EC::Value bv
+		SV* sv
+	ALIAS:
+		get = 1
+		set = 2
+	CODE:
+		RETVAL = bufr_value_getset(bv,(ix==2) ? sv : NULL);
+		if( RETVAL == NULL ) croak("unhandled value type");
+	OUTPUT:
+		RETVAL
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Value   PREFIX=bufr_value_
 
