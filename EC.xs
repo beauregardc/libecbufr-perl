@@ -1033,6 +1033,22 @@ MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Message
 
 A BUFR message used either for encoding or decoding.
 
+For encoding, the caller will have gone through the process of loading tables,
+building a template, creating a dataset, filling out the datasubsets, and the
+resulting dataset will then be passed to the L<Geo::BUFR::EC::Message::encode>
+contructor.
+
+For decoding, the caller will have the message in memory as a string and will
+call the L<Geo::BUFR::EC::Message::fromString> constructor, use the section 1
+information to find and load the most appropriate tables, then the
+L<Geo::BUFR::EC::Message::decode> method to get a dataset.
+
+=head2 Geo::BUFR::EC::Message->encode($dts,$compress=1)
+
+Encode a L<Geo::BUFR::EC::Dataset> to get a BUFR message. Compression is
+optional. The resulting message would normally then be converted to a string and
+output.
+
 =cut
 
 Geo::BUFR::EC::Message
@@ -1045,6 +1061,13 @@ encode(packname="Geo::BUFR::EC::Message",dts,compress=1)
 	OUTPUT:
 		RETVAL
 
+=head2 $msg->decode($tables)
+
+Decode the message using the provided C<$tables>, returning a
+L<Geo::BUFR::EC::Dataset>.
+
+=cut
+
 Geo::BUFR::EC::Dataset
 decode(msg,tables)
 		Geo::BUFR::EC::Message msg
@@ -1054,6 +1077,16 @@ decode(msg,tables)
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
 	OUTPUT:
 		RETVAL
+
+=head2 $msg->toString()
+
+Returns the encoded message as a binary string.
+
+Note: see the section in "Implicit upgrading for byte strings" in the
+L<encoding> man page if you're planning on combining the BUFR string with, say,
+a WMO header string.
+
+=cut
 
 SV*
 toString(msg)
@@ -1065,6 +1098,15 @@ toString(msg)
 		}
 	OUTPUT:
 		RETVAL
+
+=head2 $msg->fromString($string)
+
+Reads in a string containing a BUFR message and returns a
+L<Geo::BUFR::EC::Message> object. The string may contain a certain amount of
+pre-amble (i.e. a WMO message header). The is the first step in a message
+decode.
+
+=cut
 
 Geo::BUFR::EC::Message
 fromString(packname="Geo::BUFR::EC::Message",s)
