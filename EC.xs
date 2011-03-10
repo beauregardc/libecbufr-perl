@@ -1283,7 +1283,7 @@ C<undef>. Returns the old value.
 =cut 
 
 SV*
-set_value(d, sv=0)
+set_value(d, sv=&PL_sv_undef)
 		Geo::BUFR::EC::Descriptor d
 		SV* sv
 	ALIAS:
@@ -1482,7 +1482,7 @@ Returns the old value, if any (which may be C<undef>, indicating "missing").
 =cut
 
 SV*
-set_value(bv, sv=0)
+set_value(bv, sv=&PL_sv_undef)
 		Geo::BUFR::EC::Value bv
 		SV* sv
 	ALIAS:

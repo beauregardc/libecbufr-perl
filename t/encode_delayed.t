@@ -56,7 +56,8 @@ while( defined $pos ) {
 	$desc = $ds->get_descriptor($pos);
 	ok(defined $desc);
 
-	$desc->set($channel);
+	# at least one undef, to test...
+	$desc->set(($channel!=3) ? $channel : undef);
 
 	$pos ++;	# start at the next value
 	$channel ++;
