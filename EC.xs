@@ -1074,7 +1074,7 @@ fromString(packname="Geo::BUFR::EC::Message",s)
 		STRLEN l;
 		const char* ps;
 	CODE:
-		ps = SvPV(s,l);
+		ps = SvPVbyte(s,l);
 		if(bufr_memread_message(ps,l,&RETVAL)<=0) {
 			XSRETURN_UNDEF;
 		}
