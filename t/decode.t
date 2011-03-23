@@ -34,7 +34,18 @@ printf "Message from %04d-%02d-%02d %02d:%02d:%02d\n",
 $tables = Geo::BUFR::EC::Tables->new();
 ok( defined $tables );
 
+ok( not defined $tables->master_version() );
+ok( not defined $tables->local_version() );
+
 $tables->cmc();
+
+ok( defined $tables->master_version() );
+ok( $tables->master_version() > 12 );
+
+# default libecbufr tables have no local descriptors
+ok( not defined $tables->local_version() );
+
+print "Table versions: master=", $tables->master_version(), "\n";
 
 my $dts = $msg->decode($tables);
 ok( defined $dts );

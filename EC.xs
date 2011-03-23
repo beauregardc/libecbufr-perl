@@ -274,7 +274,80 @@ new(packname="Geo::BUFR::EC::Tables")
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
 	OUTPUT:
 		RETVAL
+
+=head2 $tables->master_version([$value])
+
+Returns the version number of the master tables. May be C<undef> if
+the master table hasn't been loaded or couldn't be determined from the
+loaded file. The value may be set to a new C<$value>, as well, in which
+case it returns the old value.
+
+=head2 $tables->local_version([$value])
+
+Returns the version number of the local tables. May be C<undef> if the
+local table hasn't been loaded or couldn't be determined from the loaded
+file. The value may be set to a new C<$value>, as well, in which case
+it returns the old value.
+
+=head2 $tables->data_cat([$value,$desc])
+
+Returns the data category of the tables. May be C<undef> if it hasn't
+already been determined. The value may be set to a new C<$value>
+(with text description C<$desc>), as well, in which case it returns the
+old value.
+
+=cut
+
+int master_version(tables,newval=0,desc=NULL)
+		Geo::BUFR::EC::Tables tables
+		int newval
+		char* desc
+	ALIAS:
+		local_version = 1
+		data_cat = 2
+	CODE:
+		switch(ix) {
+			case 0:
+				RETVAL = tables->master.version;
+				if( items == 2 && newval ) tables->master.version = newval;
+				break;
+			case 1:
+				RETVAL = tables->local.version;
+				if( items == 2 && newval ) tables->local.version = newval;
+				break;
+			case 2:
+				RETVAL = tables->data_cat;
+				if( items >= 2 && newval ) {
+					bufr_set_tables_category( tables, newval, desc );
+				}
+
+				break;
+		}
+		if(RETVAL==0) XSRETURN_UNDEF;
+	OUTPUT:
+		RETVAL
 	
+=head2 $tables->data_cat_desc()
+
+Returns the textual data category description of the tables.
+May be C<undef> if it hasn't already been determined.
+
+=cut
+
+char*
+data_cat_desc(tables)
+		Geo::BUFR::EC::Tables tables
+	CODE:
+		RETVAL = tables->data_cat_desc;
+		if( strlen(RETVAL)==0
+			|| strspn(RETVAL," ")==sizeof(tables->data_cat_desc)-1
+		) {
+			/* bufr_set_tables_category() fills with spaces... */
+			XSRETURN_UNDEF;
+		}
+	OUTPUT:
+		RETVAL
+
 void
 DESTROY(tables)
 		Geo::BUFR::EC::Tables tables
