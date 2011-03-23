@@ -35,6 +35,11 @@ ok( defined $dts );
 my $s1 = $dts->section1();
 ok( defined $s1 );
 
+# Set table version. Local descriptors aren't part of the default
+# LibECBUFR tables, so no point setting anything there.
+$s1->{master_table_version} = $tables->master_version();
+ok( $s1->{master_table_version} == $tables->master_version() );
+
 my $now = time();
 my @t = gmtime($now);
 @{$s1}{qw/year month second minute hour day/}

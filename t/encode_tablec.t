@@ -20,6 +20,8 @@ $tmpl->finalize();
 my $dts = Geo::BUFR::EC::Dataset->new($tmpl);
 ok( defined $dts );
 
+$dts->section1()->{master_table_version} = $tables->master_version();
+
 my $ds = Geo::BUFR::EC::DataSubset->new($dts);
 ok(defined $ds);
 
