@@ -71,8 +71,13 @@ for( my $i = 0; $i < 4; $i ++, $now += 12 ) {
 	}
 }
 
+
 my $message = Geo::BUFR::EC::Message->encode($dts);
 ok( defined $message );
+
+my $s2 = "Hi Yves!";
+$message->section2( $s2 );
+ok( $message->section2() eq $s2 );
 
 my $s = $message->toString();
 ok( defined $s );

@@ -1218,6 +1218,33 @@ section1(msg)
 	OUTPUT:
 		RETVAL
 
+=head2 $message->section2([$newval])
+
+Get/set the contents of (optional) BUFR section 2 of the message. Returns undef
+if there is no content in section 2. If a new value is provided, it returns the
+previous content.
+
+=cut
+
+SV*
+section2(msg,newval=NULL)
+		Geo::BUFR::EC::Message msg
+		SV* newval
+	CODE:
+		if( msg->s2.data != NULL && msg->s2.data_len>0 ) {
+			RETVAL = newSVpvn(msg->s2.data, msg->s2.data_len);
+		} else {
+			RETVAL = &PL_sv_undef;
+		}
+		if( items > 1 ) {
+			STRLEN l;
+			char* s = SvPV(ST(1), l);
+			bufr_sect2_set_data(msg, s, l);
+		}
+	OUTPUT:
+		RETVAL
+
+
 =head2 $message->edition()
 
 Get the BUFR edition value from the C<$message>.
