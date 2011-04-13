@@ -1267,7 +1267,7 @@ A set of descriptor/value pairs.
 
 =head2 Geo::BUFR::EC::DataSubset->new($dts)
 
-Create a new datasubset int the specified dataset C<$dts>. Note that the
+Create a new datasubset in the specified dataset C<$dts>. Note that the
 datasubset will be initialized according to the dataset template used for
 encoding. The datasubset is added as the last element in the dataset, so one
 can use C<$dts->count_datasubset()-1> if necessary to calculate the index.
