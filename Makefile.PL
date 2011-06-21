@@ -14,6 +14,9 @@ WriteMakefile(
 	 LIBS              => [ ExtUtils::PkgConfig->libs('libecbufr') ],
     DEFINE            => '', # e.g., '-DHAVE_SOMETHING'
     INC               => ExtUtils::PkgConfig->cflags('libecbufr'),
+	 MAN3PODS          => {
+	 		'EC.xs' => 'blib/man3/Geo::BUFR::EC.3',
+	 },
 	# Un-comment this if you add C files to link with later:
     # OBJECT            => '$(O_FILES)', # link all the C files too
 );
