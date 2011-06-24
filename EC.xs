@@ -293,6 +293,7 @@ Copyright Sa Majeste la Reine du Chef du Canada, Environnement Canada, 2009-2010
     License along with libECBUFR.  If not, see <http://www.gnu.org/licenses/>.
 
 =cut
+
 BOOT:
 {
     MY_CXT_INIT;
