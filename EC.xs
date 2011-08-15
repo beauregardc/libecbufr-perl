@@ -1459,7 +1459,8 @@ value(d)
 
 Returns scalar value for the descriptor C<$desc>. The resulting scalar will
 match the type of the object as closely as possible. Missing BUFR values will be
-returned as C<undef>.
+returned as C<undef>. Note that BUFR strings are space-filled on the right
+to the descriptor data width. The caller is responsible for removing whitespace.
 
 Note that a L<Geo::BUFR::EC::Descriptor> object may not have a value
 (i.e. Table D descriptors), in which case this function will also return
@@ -1470,6 +1471,10 @@ C<undef>. C<< $desc->is_missing() >> can be used to determine the difference.
 Set the value of C<$desc> to the scalar C<$val>. The scalar value will be mapped
 to the descriptor type as closely as possible. To store a missing value, use
 C<undef>. Returns the old value.
+
+Note that BUFR strings are space-filled on the right to the descriptor data
+width. This will be done auto-magically during encoding, and what you right to
+the message isn't necessary what comes back.
 
 =cut 
 
