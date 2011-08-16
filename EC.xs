@@ -272,7 +272,8 @@ L<http://www.wmo.int/pages/prog/www/WMOCodes.html>
 
 =head1 AUTHOR
 
-Christophe Beauregard, E<lt>chris.beauregard@ec.gc.caE<gt>
+Christophe Beauregard, E<lt>chris.beauregard@ec.gc.caE<gt>,
+E<lt>cpb@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 

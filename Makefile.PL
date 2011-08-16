@@ -10,7 +10,7 @@ WriteMakefile(
     PREREQ_PM         => {}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?     ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM  => 'lib/Geo/BUFR/EC.pm', # retrieve abstract from module
-       AUTHOR         => 'Christophe Beauregard <cpb@>') : ()),
+       AUTHOR         => 'Christophe Beauregard <cpb@cpan.org>') : ()),
 	 LIBS              => [ ExtUtils::PkgConfig->libs('libecbufr') ],
     DEFINE            => '', # e.g., '-DHAVE_SOMETHING'
     INC               => ExtUtils::PkgConfig->cflags('libecbufr'),
