@@ -132,7 +132,7 @@ static BufrSection1* get_section1(SV* hash) {
 }
 
 /**********************************************************************/
-SV* bufr_value_getset(BufrValue* bv, SV* setsv) {
+static SV* bufr_value_getset(BufrValue* bv, SV* setsv) {
 	SV* rv = NULL;
 
 	/* we always return a value... */
@@ -222,6 +222,65 @@ SV* bufr_value_getset(BufrValue* bv, SV* setsv) {
 	return rv;
 }
 
+/**********************************************************************/
+static int compare_tableb_description(const void *p1, const void *p2) {
+   EntryTableB *r1 = *(EntryTableB **)p1;
+   EntryTableB *r2 = *(EntryTableB **)p2;
+	return strcmp(r1->description, r2->description);
+}
+
+
+/*
+Convert a perl SV to a numeric descriptor value. Inputs can be:
+ * Geo::BUFR::EC::DescValue
+ * Geo::BUFR::EC::Descriptor
+ * Geo::BUFR::EC::Tables::Entry::B
+ * Geo::BUFR::EC::Tables::Entry::D
+ * integer
+ * F-X-Y string
+ * just a name, in which case a table lookup is done
+*/
+static int sv2desc( SV* sv, BUFR_Tables* tables ) {
+	int f, x, y;
+
+	if( sv_isobject(sv) ) {
+		if( sv_derived_from(sv, "Geo::BUFR::EC::DescValue") ) {
+			const BufrDescValue* myd = INT2PTR(BufrDescValue*,SvIV((SV*)SvRV(sv)));
+			if( myd ) return myd->descriptor;
+		} else if( sv_derived_from(sv, "Geo::BUFR::EC::Descriptor") ) {
+			const BufrDescriptor* myd
+				= INT2PTR(BufrDescriptor*,SvIV((SV*)SvRV(sv)));
+			if( myd ) return myd->descriptor;
+		} else if( sv_derived_from(sv, "Geo::BUFR::EC::Tables::Entry::B") ) {
+			const EntryTableB* myd = INT2PTR(EntryTableB*,SvIV((SV*)SvRV(sv)));
+			if( myd ) return myd->descriptor;
+		} else if( sv_derived_from(sv, "Geo::BUFR::EC::Tables::Entry::D") ) {
+			const EntryTableD* myd = INT2PTR(EntryTableD*,SvIV((SV*)SvRV(sv)));
+			if( myd ) return myd->descriptor;
+		}
+	} else if( looks_like_number(sv) ) {
+		return SvIV(sv);
+	} else if( 3==sscanf(SvPV_nolen(sv),"%d-%d-%d",&f,&x,&y) ) {
+		return bufr_fxy_to_descriptor(f,x,y);
+	} else if( tables ) {
+		/* do a name-based lookup */
+		EntryTableB *ptr1, tb, **p;
+		tb.description = SvPV_nolen(sv);
+		ptr1 = &tb;
+
+		if( tables->local.tableB ) {
+			p = (EntryTableB **)arr_find( tables->local.tableB,
+				(char *)&ptr1, compare_tableb_description );
+			if( p ) return (*p)->descriptor;
+		}
+		if( tables->master.tableB ) {
+			p = (EntryTableB **)arr_find( tables->master.tableB,
+				(char *)&ptr1, compare_tableb_description );
+			if( p ) return (*p)->descriptor;
+		}
+	}
+	return 0;
+}
 /**********************************************************************/
 static void my_output_handler( const char* msg ) {
 	/* FIXME: might be excessive */
@@ -447,7 +506,12 @@ Looks up bufr descriptor C<$desc> in the loaded <$tables>. Depending on the type
 of descriptor it may return a C<Geo::BUFR::EC::Tables::Entry::B> or
 C<Geo::BUFR::EC::Tables::Entry::D> object, or C<undef> on failure.
 
-C<$desc> may be an integer value or a C<Geo::BUFR::EC::DescValue> object.
+C<$desc> may be an integer value, a C<Geo::BUFR::EC::DescValue> object,
+a string of the form F-X-Y, or a BUFR element description, in which case
+a search through the table B for that name will be performed.
+C<Geo::BUFR::EC::Tables::Entry::B> and C<Geo::BUFR::EC::Tables::Entry::D>
+objects are also accepted, which might be a useful way to compare different
+tables.
 
 =cut
 
@@ -459,13 +523,7 @@ lookup(tables,desc)
 		int d = 0;
 		SV* tablessv = ST(0);
 	PPCODE:
-		/* We _could_ break this into separate functions... or an alias */
-		if( sv_isobject(desc) && sv_derived_from(desc, "Geo::BUFR::EC::DescValue") ) {
-			BufrDescValue* myd = INT2PTR(BufrDescValue*,SvIV((SV*)SvRV(desc)));
-			if( myd ) d = myd->descriptor;
-		} else {
-			d = SvIV(desc);
-		}
+		d = sv2desc( desc, tables );
 		if( !bufr_is_descriptor(d) ) {
 			XSRETURN_UNDEF;
 		} else if( bufr_is_table_b(d) ) {
@@ -775,12 +833,17 @@ that later.
 Geo::BUFR::EC::DescValue
 new(packname="Geo::BUFR::EC::DescValue",desc,...)
       char* packname
-		int desc
+		SV* desc
 	CODE:
 		RETVAL = malloc(sizeof(BufrDescValue));
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
 		bufr_init_DescValue( RETVAL );
-		RETVAL->descriptor = desc;
+
+		RETVAL->descriptor = sv2desc(desc,NULL);
+		if( !bufr_is_descriptor(RETVAL->descriptor) ) {
+			XSRETURN_UNDEF;
+		}
+
 		if( items > 2 ) {
 			int i;
 			bufr_valloc_DescValue(RETVAL, items-2);
@@ -1411,9 +1474,10 @@ Geo::BUFR::EC::Descriptor
 new(packname="Geo::BUFR::EC::Descriptor",tables,desc)
 		char* packname
 		Geo::BUFR::EC::Tables tables
-		int desc
+		SV* desc
 	CODE:
-		RETVAL = bufr_create_descriptor(tables, desc);
+		RETVAL = bufr_create_descriptor(tables,
+			sv2desc(desc, tables) );
 	OUTPUT:
 		RETVAL
 

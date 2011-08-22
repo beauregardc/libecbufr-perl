@@ -14,7 +14,9 @@ ok( defined $tmpl );
 
 # simple Table D operator with containing a delayed replication of
 # a single Table B value.
-$tmpl->add_DescValue(Geo::BUFR::EC::DescValue->new(321012));
+my $dv = Geo::BUFR::EC::DescValue->new('3-21-012');
+ok( defined $dv );
+$tmpl->add_DescValue($dv);
 $tmpl->finalize();
 
 my $dts = Geo::BUFR::EC::Dataset->new($tmpl);
@@ -37,10 +39,14 @@ $desc->set(8);
 # expand the replicator factor.
 $dts->expand_datasubset();
 
+# easier than remembering what 2135 means...
+my $e = $tables->lookup('ANTENNA ELEVATION');
+ok( defined $e );
+
 my $elev = 1;
 $pos = 0;
 while( defined $pos ) {
-	$pos = $ds->find_descriptor(2135, $pos);
+	$pos = $ds->find_descriptor($e->descriptor(), $pos);
 	last unless defined $pos;
 
 	$desc = $ds->get_descriptor($pos);
