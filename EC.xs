@@ -1566,38 +1566,53 @@ set_value(d, sv=&PL_sv_undef)
 
 Returns non-zero is C<$desc> has a proper BUFR descriptor value. This should
 always be the case unless a user manually instantiates an invalid one for some
-reason.
+reason. This method can be called either as a class or object method:
+
+	my $d = Geo::BUFR::EC::Descriptor->new($tables,1099);
+	print $d->is_descriptor();
+	print Geo::BUFR::EC::Descriptor::is_descriptor(1099);
+	print Geo::BUFR::EC::Descriptor::is_descriptor('0-01-099' );
+
+=head2 $desc->is_qualifier()
+
+Returns non-zero if C<$desc> is a BUFR qualifier. This method can be called
+either as a class or object method.
 
 =head2 $desc->is_table_b()
 
-Returns non-zero if C<$desc> is a Table B descriptor.
+Returns non-zero if C<$desc> is a Table B descriptor. This method can be called
+either as a class or object method.
 
 =head2 $desc->is_table_c()
 
-Returns non-zero if C<$desc> is a Table C descriptor.
+Returns non-zero if C<$desc> is a Table C descriptor. This method can be called
+either as a class or object method.
 
 =head2 $desc->is_table_d()
 
-Returns non-zero if C<$desc> is a Table D descriptor.
+Returns non-zero if C<$desc> is a Table D descriptor. This method can be called
+either as a class or object method.
 
 =head2 $desc->is_local()
 
-Returns non-zero if C<$desc> is a local replicator.
+Returns non-zero if C<$desc> is a local replicator. This method can be called
+either as a class or object method.
 
 =head2 $desc->is_replicator()
 
-Returns non-zero if C<$desc> is a BUFR replicator.
+Returns non-zero if C<$desc> is a BUFR replicator. This method can be called
+either as a class or object method.
 
 =head2 $desc->is_missing()
 
 Returns non-zero if C<$desc> contains a missing value, zero if the value isn't
-missing, and C<undef> is no value is associated with the descriptor.
+missing, and C<undef> if no value is associated with the descriptor.
 
 =cut
 
 int
-is_descriptor(d)
-		Geo::BUFR::EC::Descriptor d
+is_descriptor(sv)
+		SV* sv
 	ALIAS:
 		is_qualifier = 1
 		is_table_b = 2
@@ -1606,23 +1621,33 @@ is_descriptor(d)
 		is_missing = 5
 		is_table_c = 6
 		is_replicator = 7
+	PREINIT:
+		int desc = 0;
 	CODE:
-		if( ix == 5 ) {
+		if( ix == 5 && sv_isobject(sv) &&
+			sv_derived_from(sv, "Geo::BUFR::EC::DescValue")
+		) {
+			const BufrDescriptor* d
+				= INT2PTR(BufrDescriptor*,SvIV((SV*)SvRV(sv)));
 			if( d->value ) {
 				RETVAL = bufr_value_is_missing(d->value);
 			} else {
 				XSRETURN_UNDEF;
 			}
 		}
-		if( !bufr_is_descriptor(d->descriptor) ) {
+		desc = sv2desc( sv, NULL );
+		if( desc == 0 ) {
+			/* obviously, it's not going to be any of those... */
+			RETVAL = 0;
+		} else if( !bufr_is_descriptor(desc) ) {
 			RETVAL = 0;
 		} else if( ix == 0 ) {
 			RETVAL = 1;
 		} else if( ix == 4 ) {
-			RETVAL = bufr_is_local_descriptor(d->descriptor);
+			RETVAL = bufr_is_local_descriptor(desc);
 		} else {
 			int f, x, y;
-			bufr_descriptor_to_fxy(d->descriptor,&f,&x,&y);
+			bufr_descriptor_to_fxy(desc,&f,&x,&y);
 			if( ix == 3 ) {
 				RETVAL = (f == 3);
 			} else if( ix == 6 ) {
@@ -1630,7 +1655,7 @@ is_descriptor(d)
 			} else if( ix == 7 ) {
 				RETVAL = (f == 1);
 			} else if( ix == 1 ) {
-				RETVAL = (f==0 && x>=1 && x<=0);
+				RETVAL = (f==0 && x>=1 && x<=9);
 			} else if( ix == 2 ) {
 				/* NOTE: we _could_ use bufr_is_table_b() */
 				RETVAL = (f == 0);
@@ -1683,20 +1708,28 @@ flags(d)
 
 =head2 $desc->to_fxy()
 
-Returns the descriptor as list of F,X and Y values.
+Returns the descriptor as list of F,X and Y values. May be used as either
+an object or class method. i.e.
+
+	my $d = Geo::BUFR::EC::Descriptor->new($tables,1099);
+	print $d->to_fxy();
+	print Geo::BUFR::EC::Descriptor::to_fxy(1099);
+	print Geo::BUFR::EC::Descriptor::to_fxy('0-01-099' );
 
 =cut
 
 void
-to_fxy(d)
-		Geo::BUFR::EC::Descriptor d
+to_fxy(sv)
+		SV* sv
 	PREINIT:
 		int f, x, y;
+		int desc;
 	PPCODE:
-		if( !bufr_is_descriptor(d->descriptor) ) {
+		desc = sv2desc( sv, NULL );
+		if( !bufr_is_descriptor(desc) ) {
 			XSRETURN_EMPTY;
 		}
-		bufr_descriptor_to_fxy(d->descriptor,&f,&x,&y);
+		bufr_descriptor_to_fxy(desc,&f,&x,&y);
 		EXTEND(SP,3);
 		ST(0) = sv_2mortal(newSViv(f));
 		ST(1) = sv_2mortal(newSViv(x));
