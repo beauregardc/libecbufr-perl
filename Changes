@@ -1,6 +1,0 @@
-Revision history for Perl extension Geo::BUFR::EC.
-
-0.01  Tue Feb 15 11:33:58 2011
-	- original version; created by h2xs 1.23 with options
-		-n Geo::BUFR::EC -g -x -Af
-
