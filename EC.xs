@@ -1647,18 +1647,19 @@ is_descriptor(sv)
 			RETVAL = bufr_is_local_descriptor(desc);
 		} else {
 			int f, x, y;
-			bufr_descriptor_to_fxy(desc,&f,&x,&y);
 			if( ix == 3 ) {
+				bufr_descriptor_to_fxy(desc,&f,&x,&y);
 				RETVAL = (f == 3);
 			} else if( ix == 6 ) {
+				bufr_descriptor_to_fxy(desc,&f,&x,&y);
 				RETVAL = (f == 2);
 			} else if( ix == 7 ) {
+				bufr_descriptor_to_fxy(desc,&f,&x,&y);
 				RETVAL = (f == 1);
 			} else if( ix == 1 ) {
-				RETVAL = (f==0 && x>=1 && x<=9);
+				RETVAL = bufr_is_qualifier(desc);
 			} else if( ix == 2 ) {
-				/* NOTE: we _could_ use bufr_is_table_b() */
-				RETVAL = (f == 0);
+				RETVAL = bufr_is_table_b(desc);
 			} else {
 				croak("Unknown alias");
 			}
