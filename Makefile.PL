@@ -6,6 +6,10 @@ unless( -f 'Changes' ) {
 	system('/usr/bin/bzr log --long > Changes');
 }
 
+sub MY::postamble {
+	"check : test\n\n";
+}
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 WriteMakefile(
