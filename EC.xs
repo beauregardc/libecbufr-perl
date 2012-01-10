@@ -500,7 +500,7 @@ cmc(tables,tabled=NULL,tableb=NULL)
 			bufr_load_cmc_tables( tables );
 		}
 
-=head2 $tables->lookup($desc)
+=head2 $tables->lookup($desc,[...,$descn])
 
 Looks up bufr descriptor C<$desc> in the loaded <$tables>. Depending on the type
 of descriptor it may return a C<Geo::BUFR::EC::Tables::Entry::B> or
@@ -513,16 +513,45 @@ C<Geo::BUFR::EC::Tables::Entry::B> and C<Geo::BUFR::EC::Tables::Entry::D>
 objects are also accepted, which might be a useful way to compare different
 tables.
 
+If more than one descriptor is provided, a search for a matching Table D
+sequence will be performed.
+
+For example, the following are all valid lookups:
+
+	$e = $tables->lookup(4004);
+	$e = $tables->lookup($e);
+	$e = $tables->lookup('0-04-004');
+	$e = $tables->lookup('ANTENNA ELEVATION');
+	$e = $tables->lookup(4004, 4005, 4006);
+
 =cut
 
 void
-lookup(tables,desc)
+lookup(tables,desc,...)
 		Geo::BUFR::EC::Tables tables
 		SV* desc
 	PREINIT:
 		int d = 0;
 		SV* tablessv = ST(0);
 	PPCODE:
+		if( items > 2 ) {
+			EntryTableD* td;
+			int i, ndesc = 0;
+			int* descs = calloc(items, sizeof(int));
+			if( descs == NULL ) XSRETURN_UNDEF;
+			for( i = 1; i < items; i ++ ) {
+				/* FIXME: error check this... */
+				descs[ndesc++] = sv2desc( ST(i), tables );
+			}
+			td = bufr_match_tableD_sequence( tables, ndesc, descs );
+			free( descs );
+			if( td == NULL ) XSRETURN_UNDEF;
+			ST(0) = sv_newmortal();
+			sv_setref_pv(ST(0), "Geo::BUFR::EC::Tables::Entry::D", (void*)td);
+			hold_related(ST(0), tablessv);
+			XSRETURN(1);
+		}
+
 		d = sv2desc( desc, tables );
 		if( !bufr_is_descriptor(d) ) {
 			XSRETURN_UNDEF;
