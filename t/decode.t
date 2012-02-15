@@ -65,12 +65,18 @@ for( my $sno = 0; $sno < $nds; $sno ++ ) {
 		# if it wasn't in the tables, we couldn't decode
 		ok( defined $e || !($d->is_table_b() || $d->is_table_d()) );
 
-		my $val = $d->get();
-		print $d->descriptor(), ': ',
-			(defined($val) ? $val : '<no value>'),
-			' (', $d->flags(), ')',
-			;
+		if( defined $d->is_missing() ) {
+			my $val = $d->get();
+			print $d->descriptor(), ': ',
+				(defined($val) ? $val : '<missing>'),
+				' (', $d->flags(), ')',
+				;
 
+		} else {
+			# no value
+			print $d->descriptor(), ' (', $d->flags(), ')',
+				;
+		}
 		if( defined $e ) {
 			if( $e->isa('Geo::BUFR::EC::Tables::Entry::B') ) {
 				print '  ', $e->unit();

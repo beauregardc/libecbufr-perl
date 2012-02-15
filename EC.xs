@@ -1650,47 +1650,50 @@ is_descriptor(sv)
 		is_missing = 5
 		is_table_c = 6
 		is_replicator = 7
-	PREINIT:
-		int desc = 0;
 	CODE:
-		if( ix == 5 && sv_isobject(sv) &&
-			sv_derived_from(sv, "Geo::BUFR::EC::DescValue")
-		) {
-			const BufrDescriptor* d
-				= INT2PTR(BufrDescriptor*,SvIV((SV*)SvRV(sv)));
-			if( d->value ) {
-				RETVAL = bufr_value_is_missing(d->value);
+		if( ix == 5 ) {
+			BufrValue* bv = NULL;
+			if( sv_isobject(sv) &&
+				sv_derived_from(sv, "Geo::BUFR::EC::Descriptor")
+			) {
+				const BufrDescriptor* d
+					= INT2PTR(BufrDescriptor*,SvIV((SV*)SvRV(sv)));
+				bv = d->value;
+			}
+			if( bv ) {
+				RETVAL = bufr_value_is_missing(bv);
 			} else {
 				XSRETURN_UNDEF;
 			}
-		}
-		desc = sv2desc( sv, NULL );
-		if( desc == 0 ) {
-			/* obviously, it's not going to be any of those... */
-			RETVAL = 0;
-		} else if( !bufr_is_descriptor(desc) ) {
-			RETVAL = 0;
-		} else if( ix == 0 ) {
-			RETVAL = 1;
-		} else if( ix == 4 ) {
-			RETVAL = bufr_is_local_descriptor(desc);
 		} else {
-			int f, x, y;
-			if( ix == 3 ) {
-				bufr_descriptor_to_fxy(desc,&f,&x,&y);
-				RETVAL = (f == 3);
-			} else if( ix == 6 ) {
-				bufr_descriptor_to_fxy(desc,&f,&x,&y);
-				RETVAL = (f == 2);
-			} else if( ix == 7 ) {
-				bufr_descriptor_to_fxy(desc,&f,&x,&y);
-				RETVAL = (f == 1);
-			} else if( ix == 1 ) {
-				RETVAL = bufr_is_qualifier(desc);
-			} else if( ix == 2 ) {
-				RETVAL = bufr_is_table_b(desc);
+			int desc = sv2desc( sv, NULL );
+			if( desc == 0 ) {
+				/* obviously, it's not going to be any of those... */
+				RETVAL = 0;
+			} else if( !bufr_is_descriptor(desc) ) {
+				RETVAL = 0;
+			} else if( ix == 0 ) {
+				RETVAL = 1;
+			} else if( ix == 4 ) {
+				RETVAL = bufr_is_local_descriptor(desc);
 			} else {
-				croak("Unknown alias");
+				int f, x, y;
+				if( ix == 3 ) {
+					bufr_descriptor_to_fxy(desc,&f,&x,&y);
+					RETVAL = (f == 3);
+				} else if( ix == 6 ) {
+					bufr_descriptor_to_fxy(desc,&f,&x,&y);
+					RETVAL = (f == 2);
+				} else if( ix == 7 ) {
+					bufr_descriptor_to_fxy(desc,&f,&x,&y);
+					RETVAL = (f == 1);
+				} else if( ix == 1 ) {
+					RETVAL = bufr_is_qualifier(desc);
+				} else if( ix == 2 ) {
+					RETVAL = bufr_is_table_b(desc);
+				} else {
+					croak("Unknown alias");
+				}
 			}
 		}
 	OUTPUT:
