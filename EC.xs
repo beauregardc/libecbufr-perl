@@ -1463,9 +1463,22 @@ find_descriptor(ds,desc,startpos=0)
 
 MODULE = Geo::BUFR::EC PACKAGE = Geo::BUFR::EC::DataSubset PREFIX = bufr_datasubset_
 
+=head2 $subset->count_descriptor()
+
+Returns the number of descriptors in the data subset.
+
+=cut
+
 int
 bufr_datasubset_count_descriptor(ds)
 		Geo::BUFR::EC::DataSubset ds
+
+=head2 $subset->get_descriptor($pos)
+
+Return the descriptor at position C<$pos>. Note that descriptors are indexed
+from zero.
+
+=cut
 
 Geo::BUFR::EC::Descriptor
 bufr_datasubset_get_descriptor(ds,pos)
@@ -1475,6 +1488,13 @@ bufr_datasubset_get_descriptor(ds,pos)
 		SV* relatedsv = ST(0);
 	CLEANUP:
 		hold_related(ST(0),relatedsv);
+
+=head2 $subset->next_descriptor($pos)
+
+Return the descriptor at position C<$pos>, and increment C<$pos> to the next
+value.
+
+=cut
 
 Geo::BUFR::EC::Descriptor
 bufr_datasubset_next_descriptor(ds,pos)
