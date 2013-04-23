@@ -5,6 +5,7 @@
 #include "ppport.h"
 
 #include <bufr_api.h>
+#include <assert.h>
 
 typedef BUFR_Message* Geo__BUFR__EC__Message;
 typedef BUFR_Dataset* Geo__BUFR__EC__Dataset;
@@ -27,13 +28,20 @@ static ssize_t appendsv( void *dsv, size_t len, const char *buffer ) {
  * We don't want those other SV's to get freed and leave us pointing at junk
  * memory so we increment the related count as well. In some cases, we may
  * not even want to free our own structure so we ensure the release
- * indicates whether or not a related object exists. In some cases, of course,
- * we may release both a related object and our own memory.
+ * indicates whether or not a related object exists (i.e. you'd do this if
+ * the object is actually a pointer to memory held by the related object
+ * rather than memory allocated... this happens with things like table
+ * entries which could be separately allocated, or could be from a table).
+ * In some cases, of course, we may release both a related object and
+ * our own memory.
  * NOTE: some care may be needed to prevent circular references.
  */
 static void hold_related(SV* sv, SV* related) {
-	SvREFCNT_inc( related );
-	sv_magic(SvRV(sv), NULL, '~', (void*)related, 0 );
+	if( sv && related && related != &PL_sv_undef ) {
+		assert( sv != related );
+		SvREFCNT_inc( related );
+		sv_magic(SvRV(sv), NULL, '~', (void*)related, 0 );
+	}
 }
 static SV* release_related(SV* sv) {
 	MAGIC* m = mg_find(SvRV(sv),'~');
@@ -100,7 +108,11 @@ static SV* new_section1(BufrSection1* s1, SV* relatedsv) {
 	stash = gv_stashpv("Geo::BUFR::EC::Section1", GV_ADD);
 	sv_bless(tie, stash);
 	hv_magic(hash, (GV*)tie, PERL_MAGIC_tied);
+	SvREFCNT_dec((SV*)tie);	/* hv_magic incremented this */
 
+	/* need to access the actual s1 data from inside the tie methods,
+	 * _plus_ we need to know how to free it.
+	 */
 	sv_magic((SV*)SvRV(tie), NULL, '~', (void*)mgs1, 0 );
 
 	for( i = 0; s1keys[i].key; i ++ ) {
@@ -114,7 +126,8 @@ static SV* new_section1(BufrSection1* s1, SV* relatedsv) {
 }
 
 static void free_section1(SV* hash) {
-	MAGIC* m = mg_find(hash,'~');
+	/* get_section1() uses SvRV(), we have to do it ourselves... */
+	MAGIC* m = mg_find(SvRV(hash),'~');
 	if( m && m->mg_ptr ) {
 		mg_section1* mgs1 = (mg_section1*) m->mg_ptr;
 		SvREFCNT_dec( mgs1->relatedsv );
@@ -936,7 +949,7 @@ value(dv,pos=0)
 	OUTPUT:
 		RETVAL
 	CLEANUP:
-		hold_related(ST(0),relatedsv);
+		if( RETVAL ) hold_related(ST(0),relatedsv);
 
 =head2 $dv->count_values()
 
@@ -1014,7 +1027,7 @@ add_Value(dv,desc=NULL)
 	OUTPUT:
 		RETVAL
 	CLEANUP:
-		hold_related(ST(0),relatedsv);
+		if( RETVAL ) hold_related(ST(0),relatedsv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset
 
@@ -1112,7 +1125,7 @@ bufr_get_datasubset(dts,pos=0)
 	PREINIT:
 		SV* dtssv = ST(0);
 	CLEANUP:
-		hold_related(ST(0), dtssv);
+		if( RETVAL ) hold_related(ST(0), dtssv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Section1
 
@@ -1136,7 +1149,7 @@ void
 DESTROY(s1)
 		SV* s1
 	PPCODE:
-		free_section1( SvRV(ST(0)) );
+		free_section1( ST(0) );
 
 SV*
 FETCH(self, key)
@@ -1430,14 +1443,14 @@ new(packname="Geo::BUFR::EC::DataSubset",dts)
 	OUTPUT:
 		RETVAL
 	CLEANUP:
-		hold_related(ST(0), dtssv);
+		if( RETVAL ) hold_related(ST(0), dtssv);
 
 void
 DESTROY(ds)
 		Geo::BUFR::EC::DataSubset ds
 	CODE:
 		/* Note that datasubsets can't existing independent on a dataset, so we'll
-		 * never need to actually free one. We will, however, probably hold a ref
+		 * never need to actually free one. We will, however, always hold a ref
 		 * to the dataset object.
 		 */ 
 		release_related(ST(0));
@@ -1487,7 +1500,7 @@ bufr_datasubset_get_descriptor(ds,pos)
 	PREINIT:
 		SV* relatedsv = ST(0);
 	CLEANUP:
-		hold_related(ST(0),relatedsv);
+		if( RETVAL ) hold_related(ST(0),relatedsv);
 
 =head2 $subset->next_descriptor($pos)
 
@@ -1503,7 +1516,7 @@ bufr_datasubset_next_descriptor(ds,pos)
 	PREINIT:
 		SV* relatedsv = ST(0);
 	CLEANUP:
-		hold_related(ST(0),relatedsv);
+		if( RETVAL ) hold_related(ST(0),relatedsv);
 
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Descriptor
 
@@ -1567,7 +1580,7 @@ value(d)
 	OUTPUT:
 		RETVAL
 	CLEANUP:
-		hold_related(ST(0),relatedsv);
+		if( RETVAL ) hold_related(ST(0),relatedsv);
 
 =head2 $desc->get()
 
