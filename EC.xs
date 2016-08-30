@@ -1563,6 +1563,50 @@ descriptor(d)
 	OUTPUT:
 		RETVAL
 
+=head2 $desc->qualifiers([qualdescs])
+
+Returns the list of active (uncancelled) L<Geo::BUFR::EC::Descriptor>
+qualifiers for the given descriptor. If a specific list of C<qualdescs>
+descriptors are requested, only those will be returned (where available).
+
+Note that the descriptor needs to be part of an expanded datasubset in order
+for qualifiers to be available.
+
+=cut 
+
+void qualifiers(d,...)
+		Geo::BUFR::EC::Descriptor d
+	PREINIT:
+		SV* relatedsv = ST(0);
+		int r = 0, i;
+	PPCODE:
+		if( d->meta == NULL ) XSRETURN_EMPTY;
+		if( d->meta->nb_qualifiers==0 ) XSRETURN_EMPTY;
+		if( items > 1 ) {
+			for( i = 1; i < items; i ++ ) {
+				BufrDescriptor* qual = bufr_fetch_rtmd_qualifier(
+					SvIV(ST(i)), d->meta);
+				if( qual ) {
+					ST(r) = sv_newmortal();
+					sv_setref_pv(ST(r), "Geo::BUFR::EC::Descriptor", (void*)qual);
+					hold_related(ST(r), relatedsv);
+					r ++;
+				}
+			}
+		} else {
+			EXTEND(SP,d->meta->nb_qualifiers);
+			for( i = 0; i < d->meta->nb_qualifiers; i ++ ) {
+				if( d->meta->qualifiers[i]==NULL ) continue;
+				ST(r) = sv_newmortal();
+				sv_setref_pv(ST(r), "Geo::BUFR::EC::Descriptor",
+					(void*)d->meta->qualifiers[i]);
+				hold_related(ST(r), relatedsv);
+				r ++;
+			}
+			r ++;
+		}
+		XSRETURN(r);
+
 =head2 $desc->value()
 
 Returns the L<Geo::BUFR::EC::Value> value for C<$desc>.

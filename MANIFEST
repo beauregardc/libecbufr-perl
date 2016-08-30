@@ -18,3 +18,4 @@ t/encode_delayed_template.t
 t/encode_tablec.t
 t/class_method.t
 t/lookup.t
+t/quals.t
