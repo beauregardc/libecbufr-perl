@@ -1,4 +1,4 @@
-Geo-BUFR-EC version 0.01
+Geo-BUFR-EC version 0.5
 ========================
 
 LibECBUFR-perl: Environment Canada BUFR Library Perl bindings
@@ -9,7 +9,7 @@ for both reading and writing.
 
 DEPENDENCIES
 
-Requires the LibECBUFR C library.
+Requires the LibECBUFR C library (https://github.com/ECCC-MSC/libecbufr)
 
 Requires the ExtUtils::PkgConfig perl module to find the LibECBUFR
 C library.

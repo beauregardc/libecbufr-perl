@@ -3,7 +3,7 @@ use ExtUtils::MakeMaker;
 use ExtUtils::PkgConfig;
 
 unless( -f 'Changes' ) {
-	system('/usr/bin/bzr log --long > Changes');
+	system('/usr/bin/git log > Changes');
 }
 
 sub MY::postamble {
