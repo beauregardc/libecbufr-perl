@@ -1289,20 +1289,23 @@ encode(packname="Geo::BUFR::EC::Message",dts,compress=1)
 	OUTPUT:
 		RETVAL
 
-=head2 $msg->decode($tables)
+=head2 $msg->decode($tables,$only_valid=0)
 
 Decode the message using the provided C<$tables>, returning a
-L<Geo::BUFR::EC::Dataset>.
+L<Geo::BUFR::EC::Dataset>. If the C<$only_valid> flag is set, datasets with
+BUFR_FLAG_INVALID data_flag set will also return C<undef>.
 
 =cut
 
 Geo::BUFR::EC::Dataset
-decode(msg,tables)
+decode(msg,tables,only_valid=0)
 		Geo::BUFR::EC::Message msg
 		Geo::BUFR::EC::Tables tables
+		int only_valid
 	CODE:
 		RETVAL = bufr_decode_message(msg,tables);
 		if( RETVAL == NULL ) XSRETURN_UNDEF;
+		if( only_valid && RETVAL->data_flag & BUFR_FLAG_INVALID ) XSRETURN_UNDEF;
 	OUTPUT:
 		RETVAL
 
