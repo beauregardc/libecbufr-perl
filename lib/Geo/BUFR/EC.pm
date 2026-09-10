@@ -25,7 +25,7 @@ our @EXPORT = qw(
 	
 );
 
-our $VERSION = '0.05';
+our $VERSION = '0.5';
 
 require XSLoader;
 XSLoader::load('Geo::BUFR::EC', $VERSION);
