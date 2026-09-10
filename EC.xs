@@ -1073,6 +1073,31 @@ section1(dts)
 	OUTPUT:
 		RETVAL
 
+=head2 $dts->data_flag()
+
+Get the C<data_flag> for the Dataset.
+
+=head2 $dts->is_invalid()
+
+Return non-zero if the BUFR_FLAG_INVALID data_flag was set during decode.
+
+=head2 $dts->is_suspicious()
+
+Return non-zero if the BUFR_FLAG_SUSPICIOUS data_flag was set during decode.
+
+=cut
+
+int
+data_flag(dts)
+		Geo::BUFR::EC::Dataset dts
+	ALIAS:
+		is_invalid = BUFR_FLAG_INVALID
+		is_suspicious = BUFR_FLAG_SUSPICIOUS
+	CODE:
+		RETVAL = ix ? (dts->data_flag & ix) : dts->data_flag;
+	OUTPUT:
+		RETVAL
+
 MODULE = Geo::BUFR::EC     PACKAGE = Geo::BUFR::EC::Dataset     PREFIX = bufr_
 
 =head2 $dataset->expand_datasubset($pos=0)

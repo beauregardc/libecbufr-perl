@@ -47,8 +47,11 @@ ok( not defined $tables->local_version() );
 
 print "Table versions: master=", $tables->master_version(), "\n";
 
-my $dts = $msg->decode($tables);
+my $dts = $msg->decode($tables,0);
 ok( defined $dts );
+
+print "invalid = ", $dts->is_invalid(), "\n";
+print "suspicious = ", $dts->is_suspicious(), "\n";
 
 my $nds = $dts->count_datasubset();
 print "$nds data subsets\n";
